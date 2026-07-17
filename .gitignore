@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Node / frontend
+node_modules/
+
+# OS
+.DS_Store
+
+# ClearMap audit outputs (per-repo scan results; never commit findings)
+.clearmap/
+
+# Internal / local-only (never commit; not part of the public project)
+.defract/
+.defract-worktrees/
+.claude/
+clearmap.code-workspace
+runbooks/

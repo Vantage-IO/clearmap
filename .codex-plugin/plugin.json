@@ -1,0 +1,20 @@
+{
+  "name": "clearmap",
+  "version": "0.3.0",
+  "description": "HIPAA-aware healthcare development guidance and technical-risk auditing inside your coding agent.",
+  "publisher": {
+    "name": "Vantage IO",
+    "url": "https://vantageio.com"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/vantage-io/clearmap",
+  "keywords": ["hipaa", "healthcare", "security", "clinical-ai"],
+  "skills": "./skills/",
+  "commands": "./commands/",
+  "defaultPrompts": [
+    "Use ClearMap while implementing this healthcare feature.",
+    "Audit this repository with ClearMap.",
+    "Review this patient-data flow before writing code.",
+    "Fix the critical and high ClearMap findings."
+  ]
+}

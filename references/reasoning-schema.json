@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ClearMap reasoning output",
+  "description": "Shape of the reasoning.json an agent (or an OpenAI-compatible provider) writes for merge_reasoning.py. Runtime validation in ClearMap is stdlib-only; this schema documents and tests the contract. Category, hipaa_ref, and authority_type are taken from references/taxonomy.json at merge time, not trusted from this input.",
+  "type": "object",
+  "required": ["findings"],
+  "properties": {
+    "provider": {"type": "string", "enum": ["host-agent", "openai-compatible", "manual"]},
+    "model": {"type": ["string", "null"]},
+    "run_id": {"type": ["string", "null"]},
+    "manifest": {
+      "type": "object",
+      "description": "Completion manifest. source_layer only becomes deterministic+reasoning when a manifest reports no failed batches.",
+      "properties": {
+        "checks_evaluated": {"type": "array", "items": {"type": "string"}},
+        "files_considered": {"type": "integer", "minimum": 0},
+        "files_skipped": {"type": "array"},
+        "batches_completed": {"type": "integer", "minimum": 0},
+        "batches_failed": {"type": "integer", "minimum": 0},
+        "privacy_mode": {"type": "string"}
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "category", "severity", "source", "confidence", "file",
+                     "line", "title", "structural_snippet", "why"],
+        "properties": {
+          "id": {"type": "string", "description": "A canonical reasoning-layer id from taxonomy.json"},
+          "category": {"type": "string"},
+          "severity": {"enum": ["critical", "high", "medium", "low"]},
+          "source": {"const": "reasoning"},
+          "confidence": {"enum": ["high", "medium", "low"]},
+          "file": {"type": "string", "description": "Repo-relative path, no '..'"},
+          "line": {"type": "integer", "minimum": 1},
+          "title": {"type": "string"},
+          "structural_snippet": {"type": "string", "description": "Structure only; never a raw PHI or secret value"},
+          "why": {"type": "string"},
+          "remediation": {"type": "string"},
+          "reviewer_question": {"type": "string"},
+          "severity_override_reason": {"type": "string", "description": "Required to deviate from the canonical severity"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+# TRANSIT — Transmission Security (45 CFR 164.312(e)). Deterministic layer.
+#
+# Flags cleartext (http:// / ws://) to EXTERNAL / open-network hosts. Internal
+# hosts (localhost, RFC-1918, *.internal, *.svc.cluster.local) are deliberately
+# NOT flagged here — a regex cannot tell whether PHI flows over an internal hop,
+# so internal cleartext is left to the reasoning layer (TRANSIT-04, advisory).
+#
+# Known-constant namespace/schema hosts (SVG xmlns, XML schemas, JSON-LD) are
+# identifiers, not endpoints — nothing is transmitted to them. They were the
+# top real-repo false-positive class (inline-SVG xmlns in .tsx components).
+rules:
+  - id: transit-external-cleartext-url
+    languages: [python, typescript, javascript]
+    severity: ERROR
+    message: >-
+      ePHI may be transmitted over a cleartext (http:// or ws://) connection to an
+      external/open-network host. 164.312(e)(1) (Transmission Security) is Required;
+      use TLS (https/wss) for every PHI path.
+    metadata:
+      clearmap_category: TRANSIT
+      clearmap_severity: critical
+      clearmap_title: PHI transmitted over cleartext to an external host
+      hipaa_ref: 164.312(e)(1)
+      remediation: Use https/wss (TLS) for all PHI transmission; reject non-TLS endpoints by policy.
+    patterns:
+      - pattern-regex: >-
+          (?:http|ws)://(?!localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|[A-Za-z0-9.-]*\.internal\b|[A-Za-z0-9.-]*\.svc\.cluster\.local|www\.w3\.org|schemas\.xmlsoap\.org|schema\.org|www\.schema\.org|xmlns\.com|purl\.org|ns\.adobe\.com|www\.apache\.org|xml\.apache\.org|maven\.apache\.org|schemas\.openxmlformats\.org|schemas\.microsoft\.com|schemas\.android\.com|json-schema\.org|specs\.openid\.net|www\.opengis\.net)[A-Za-z0-9.-]+

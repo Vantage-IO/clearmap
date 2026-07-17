@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClearMap HIPAA Risk Report: golden-fixture</title>
+<style>
+:root {
+  --ink: #0D1A30; --muted: #46536A; --muted2: #79859A; --line: #dbe4f0;
+  --bg: #F6F8FB; --card: #ffffff; --tint: #E5EDFB;
+  --blue: #0046BD; --blue-deep: #00348C; --blue-dark: #3B7BF0; --header: #0B1730;
+  --critical: #b91c1c; --high: #c2410c; --medium: #a16207; --low: #475569;
+  --font-display: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.65 var(--font-body); }
+.page { max-width: 860px; margin: 0 auto; padding: 0 28px 64px; }
+a { color: var(--blue); }
+header.band { background: var(--header); color: #e8edf6; padding: 40px 0 30px;
+  margin-bottom: 36px; }
+header.band .page { padding-bottom: 0; }
+.wordmark { font-family: var(--font-display); font-size: 13px;
+  letter-spacing: .22em; text-transform: uppercase; color: var(--blue-dark);
+  font-weight: 700; }
+h1 { font-family: var(--font-display); font-size: 30px; letter-spacing: -.01em;
+  margin: 8px 0 6px; color: #ffffff; font-weight: 700; }
+.meta { font-size: 13px; color: #9FB0C4; }
+.callout { margin-top: 20px; padding: 11px 16px;
+  border-left: 4px solid var(--blue-dark); background: rgba(59,123,240,.10);
+  font-size: 13px; color: #cfe0ff; border-radius: 0 6px 6px 0; }
+h2 { font-family: var(--font-display); font-size: 21px; letter-spacing: -.01em;
+  margin: 44px 0 14px; padding-bottom: 8px; border-bottom: 2px solid var(--line); }
+h2 .secno { color: var(--muted2); font-weight: 600; margin-right: 10px; }
+.headline { font-size: 17px; font-weight: 650; margin: 0 0 14px; }
+.warn { margin: 0 0 16px; padding: 12px 16px; border-left: 4px solid #a16207;
+  background: #fbf4e6; color: #7a4d06; font-size: 13.5px; border-radius: 0 6px 6px 0; }
+.tiles { display: flex; gap: 12px; flex-wrap: wrap; margin: 0 0 16px; }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 18px; min-width: 96px; text-align: center; }
+.tile .n { font-family: var(--font-display); font-size: 26px; font-weight: 700;
+  line-height: 1.15; display: block; }
+.tile .lbl { font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); }
+ol.top { padding-left: 22px; margin: 8px 0 0; }
+ol.top li { margin: 5px 0; }
+ul.steps { padding-left: 22px; margin: 8px 0 0; }
+ul.steps li { margin: 5px 0; }
+.scoreband { display: flex; align-items: center; gap: 28px; flex-wrap: wrap;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 24px; }
+.ring { width: 132px; height: 132px; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center; }
+.ring .hole { width: 104px; height: 104px; border-radius: 50%;
+  background: var(--card); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; }
+.ring .num { font-family: var(--font-display); font-size: 34px;
+  font-weight: 800; line-height: 1; }
+.ring .of { font-size: 12px; color: var(--muted2); }
+.posture { font-size: 16px; font-weight: 650; margin-bottom: 6px; }
+.scorenote { font-size: 13px; color: var(--muted); max-width: 560px; }
+table { width: 100%; border-collapse: collapse; background: var(--card);
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  font-size: 13.5px; }
+th { text-align: left; background: var(--tint); padding: 9px 12px;
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--blue-deep); }
+td { padding: 9px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+td.url { font-size: 12px; word-break: break-all; }
+code, .loc { font: 12.5px/1.5 var(--font-mono); background: var(--tint);
+  padding: 1px 5px; border-radius: 4px; }
+.chip { display: inline-block; padding: 1px 10px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; color: #fff; white-space: nowrap; }
+.chip.outline { background: transparent !important; border: 1.5px solid currentColor; }
+.legend { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.bar { background: var(--line); border-radius: 4px; height: 8px; min-width: 90px;
+  position: relative; overflow: hidden; }
+.bar > i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+.finding { background: var(--card); border: 1px solid var(--line);
+  border-radius: 10px; margin: 14px 0; border-left-width: 4px; }
+.finding summary { cursor: pointer; padding: 13px 16px; font-weight: 650;
+  display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+  font-family: var(--font-display); font-size: 14.5px; }
+.finding summary::-webkit-details-marker { display: none; }
+.finding .body { padding: 2px 16px 14px; border-top: 1px solid var(--line); }
+.finding dl { margin: 10px 0 0; display: grid; grid-template-columns: 160px 1fr;
+  row-gap: 7px; column-gap: 12px; font-size: 13.5px; }
+.finding dt { color: var(--muted); font-weight: 600; }
+.finding dd { margin: 0; }
+.finding .refline { color: var(--muted2); font-family: var(--font-mono);
+  font-size: 12px; }
+.srcnote { display: block; font-size: 11px; color: var(--muted2); margin-top: 3px; }
+ul.qs { padding-left: 20px; }
+.build { background: var(--card); border: 1px solid var(--line);
+  border-radius: 10px; padding: 16px 20px; font-size: 14px; }
+.build ul { margin: 6px 0 0; padding-left: 20px; }
+.notes { font-size: 13px; color: var(--muted); margin-top: 10px;
+  padding-left: 20px; }
+footer.disclaimer { margin-top: 44px; padding: 18px 20px; font-size: 12.5px;
+  color: var(--muted); background: var(--tint); border-radius: 10px;
+  border: 1px solid var(--line); }
+.cta { margin-top: 18px; padding: 18px 20px; border-radius: 10px;
+  background: var(--header); color: #cfe0ff; font-size: 13.5px; }
+.cta a { color: var(--blue-dark); font-weight: 650; }
+.na { color: var(--muted2); }
+p.para strong { color: var(--ink); }
+@page { margin: 18mm; }
+@media print {
+  body { background: #fff; font-size: 12px; }
+  header.band { background: #fff; color: #000; border-bottom: 3px solid #000;
+    padding: 0 0 12px; }
+  header.band h1 { color: #000; }
+  .wordmark { color: #000; }
+  .callout { color: #333; border-left-color: #000; background: #fff; }
+  .meta { color: #333; }
+  .scoreband, .finding, table, .tile, .build, .cta { break-inside: avoid;
+    border-color: #999; }
+  h2 { break-after: avoid; }
+  .finding { page-break-inside: avoid; }
+  .cta { background: #fff; color: #000; border: 1px solid #999; }
+  .cta a { color: #000; }
+  a { color: inherit; text-decoration: none; }
+}
+</style></head><body>
+<header class="band"><div class="page">
+<div class="wordmark">ClearMap</div>
+<h1>HIPAA Risk Report: golden-fixture</h1>
+<div class="meta">Generated 2026-01-01 · ClearMap v0.3.0 · Regulatory baseline 2026.1 (as of 2026-06-01)</div>
+<div class="callout"><strong>Technical risk signal, not a certification.</strong> This report is not a HIPAA compliance certification and does not mean the product is or is not HIPAA compliant.</div>
+</div></header>
+<div class="page">
+<h2><span class="secno">1</span>Executive summary</h2>
+<p class="headline">ClearMap HIPAA Technical Risk Score: 51/100. Elevated technical risk: multiple significant gaps.</p>
+<p class="scorenote">Technical code-risk signal only. Not a compliance score, certification, formal HIPAA risk analysis, or legal determination.</p>
+<div class="tiles">
+<div class="tile"><span class="n" style="color:#b91c1c">3</span><span class="lbl">Critical</span></div>
+<div class="tile"><span class="n" style="color:#c2410c">2</span><span class="lbl">High</span></div>
+<div class="tile"><span class="n" style="color:#a16207">1</span><span class="lbl">Medium</span></div>
+<div class="tile"><span class="n" style="color:#475569">1</span><span class="lbl">Low</span></div>
+</div>
+<p class="para">7 findings across 8 of 10 applicable safeguard categories: 4 confirmed by automated rules and 3 identified by AI-assisted review (pending engineer verification). 3 likely false positives were suppressed automatically.</p>
+<p><strong>Top findings</strong></p>
+<ol class="top">
+<li><strong>Database connection string with embedded credentials</strong> (Critical) · <span class="loc">backend/config.py:9</span></li>
+<li><strong>Unredacted PHI interpolated into LLM prompt</strong> (Critical) · <span class="loc">backend/rag/assistant.py:24</span></li>
+<li><strong>Unguarded PHI read endpoint (no authentication)</strong> (Critical) · <span class="loc">backend/api/patients.py:13</span></li>
+</ol>
+<p><strong>Suggested next steps</strong></p>
+<ul class="steps">
+<li>Remediate the 3 critical findings first. The worst finding caps the overall score.</li>
+<li>Have an engineer verify the 3 findings identified by AI-assisted review.</li>
+<li>Re-run ClearMap after remediation to confirm the score improves.</li>
+</ul>
+<h2><span class="secno">2</span>Scope and method</h2>
+<p class="para"><strong>Scanned:</strong> golden-fixture. 8 of 10 safeguard categories apply to this codebase; categories with no matching surface are excluded from scoring rather than scored 100.</p>
+<p class="para"><strong>Automated pattern analysis:</strong> curated ClearMap rules executed by Semgrep 1.164.0 and Gitleaks 8.30.1. These findings are reproducible from run to run and appear below as Confirmed.</p>
+<p class="para"><strong>AI-assisted code review:</strong> an AI agent reviewed the code against ClearMap&#x27;s clinical and audit checklists, covering risks that pattern matching cannot judge. These findings appear below as Needs verification and should be confirmed by an engineer.</p>
+<p class="para"><strong>Suppressed:</strong> 3 findings filtered as known false-positive classes (vendored paths, publishable tokens, i18n keys, templated placeholders) or by explicit allow rules.</p>
+<p class="para">All analysis ran locally. No source code or PHI left the machine.</p>
+<p class="para"><strong>Assessment coverage:</strong> automated scan complete; AI-assisted review complete. Regulatory baseline 2026.1. Authority basis cited: hipaa-required, onc-certification-criterion.</p>
+<h2><span class="secno">3</span>HIPAA Risk Score</h2>
+<div class="scoreband">
+<div class="ring" style="background:conic-gradient(#a16207 51%, var(--line) 0)"><div class="hole"><span class="num" style="color:#a16207">51</span><span class="of">/ 100</span></div></div>
+<div><div class="posture">Elevated technical risk: multiple significant gaps.</div><div class="scorenote">The score is capped at 51/100 (3 critical findings). The worst finding sets the cap, and critical findings compound with diminishing returns. ClearMap checks technical safeguards only and never reports a perfect score. Appendix A explains how the score is built.</div></div>
+</div>
+<h2><span class="secno">4</span>Category scorecard</h2>
+<table><thead><tr><th>Category</th><th>Score</th><th></th><th>Findings</th><th>Weight</th><th>Applies?</th></tr></thead><tbody>
+<tr><td>AI-RAG: AI / LLM / RAG</td><td><strong>67</strong></td><td><div class="bar"><i style="width:67%;background:#a16207"></i></div></td><td>2 to verify</td><td>0.27</td><td>yes</td></tr>
+<tr><td>AUDIT: Audit Controls</td><td><strong>85</strong></td><td><div class="bar"><i style="width:85%;background:#0046BD"></i></div></td><td>1 to verify</td><td>0.21</td><td>yes</td></tr>
+<tr><td>ACCESS: Access Control</td><td><strong>75</strong></td><td><div class="bar"><i style="width:75%;background:#a16207"></i></div></td><td>1 confirmed</td><td>0.11</td><td>yes</td></tr>
+<tr><td>TRANSIT: Transmission Security</td><td><strong>85</strong></td><td><div class="bar"><i style="width:85%;background:#0046BD"></i></div></td><td>1 confirmed</td><td>0.11</td><td>yes</td></tr>
+<tr><td>APPSEC: Application Security</td><td><strong>100</strong></td><td><div class="bar"><i style="width:100%;background:#15803d"></i></div></td><td>0</td><td>0.11</td><td>yes</td></tr>
+<tr><td>INTEGRITY: Integrity</td><td><strong>100</strong></td><td><div class="bar"><i style="width:100%;background:#15803d"></i></div></td><td>0</td><td>0.09</td><td>yes</td></tr>
+<tr><td>AUTH: Authentication</td><td><strong>75</strong></td><td><div class="bar"><i style="width:75%;background:#a16207"></i></div></td><td>1 confirmed</td><td>0.05</td><td>yes</td></tr>
+<tr><td>SECRETS: Secrets / Config</td><td><strong>97</strong></td><td><div class="bar"><i style="width:97%;background:#15803d"></i></div></td><td>1 confirmed</td><td>0.05</td><td>yes</td></tr>
+<tr class="na"><td>TRACKING: Tracking / Analytics</td><td>N/A</td><td></td><td></td><td></td><td>not detected</td></tr>
+<tr class="na"><td>SESSION: Frontend / Session</td><td>N/A</td><td></td><td></td><td></td><td>not detected</td></tr>
+</tbody></table>
+<p class="scorenote">N/A means that category's surface (for example frontend or AI/LLM) was not detected in this codebase; it is excluded from the score, not scored 100. Weights are renormalized across the categories that apply.</p>
+<h2><span class="secno">5</span>Findings</h2>
+<table><thead><tr><th>Severity</th><th>Finding</th><th>Location</th><th>Citation</th><th>Status</th></tr></thead><tbody>
+<tr><td><span class="chip" style="background:#b91c1c">Critical</span></td><td>Database connection string with embedded credentials</td><td><span class="loc">backend/config.py:9</span></td><td>164.312(a)(2)(i)</td><td><span class="chip" style="background:#15803d">Confirmed</span></td></tr>
+<tr><td><span class="chip" style="background:#b91c1c">Critical</span></td><td>Unredacted PHI interpolated into LLM prompt</td><td><span class="loc">backend/rag/assistant.py:24</span></td><td>HTI-1 (b)(11)</td><td><span class="chip outline" style="color:#00348C">Needs verification</span></td></tr>
+<tr><td><span class="chip" style="background:#b91c1c">Critical</span></td><td>Unguarded PHI read endpoint (no authentication)</td><td><span class="loc">backend/api/patients.py:13</span></td><td>164.312(d)</td><td><span class="chip" style="background:#15803d">Confirmed</span></td></tr>
+<tr><td><span class="chip" style="background:#c2410c">High</span></td><td>PHI create without audit event</td><td><span class="loc">backend/api/patients.py:30</span></td><td>164.312(b)</td><td><span class="chip outline" style="color:#00348C">Needs verification</span></td></tr>
+<tr><td><span class="chip" style="background:#c2410c">High</span></td><td>PHI transmitted over cleartext to an external host</td><td><span class="loc">backend/integrations.py:15</span></td><td>164.312(e)(1)</td><td><span class="chip" style="background:#15803d">Confirmed</span></td></tr>
+<tr><td><span class="chip" style="background:#a16207">Medium</span></td><td>No abstain path on weak retrieval</td><td><span class="loc">backend/rag/assistant.py:41</span></td><td></td><td><span class="chip outline" style="color:#00348C">Needs verification</span></td></tr>
+<tr><td><span class="chip" style="background:#475569">Low</span></td><td>JWT (test-fixture path: verify it is not a real credential)</td><td><span class="loc">tests/test_auth.py:9</span></td><td>164.312(a)(1)</td><td><span class="chip" style="background:#15803d">Confirmed</span></td></tr>
+</tbody></table>
+<p class="legend">Confirmed = found by an automated rule, reproducible from run to run. Needs verification = identified by AI-assisted review and awaiting confirmation by an engineer.</p>
+<h2><span class="secno">6</span>Priority findings: critical and high</h2>
+<p class="scorenote">AI/LLM/RAG findings are detailed separately in section 7.</p>
+<details class="finding" open style="border-left-color:#b91c1c"><summary><span class="chip" style="background:#b91c1c">Critical</span> <span>Database connection string with embedded credentials</span></summary><div class="body"><dl><dt>Location</dt><dd><span class="loc">backend/config.py:9</span></dd><dt>Regulation</dt><dd><a href="https://www.ecfr.gov/current/title-45/section-164.312">45 CFR 164.312(a)(2)(i): Unique user identification (HIPAA Security Rule requirement)</a></dd><dt>Evidence</dt><dd><code>DATABASE_URL = &quot;postgresql://admin:[REDACTED]@db.internal:5432/patients&quot;</code> <span class="srcnote">(redacted, no raw PHI)</span></dd><dt>Why it matters</dt><dd>DB credentials are committed in source.</dd><dt>Reviewer question</dt><dd>Are PHI actions restricted to permitted roles, and sessions revocable?</dd><dt>Remediation</dt><dd>Load credentials from a secret manager; rotate the password.</dd><dt>Verification</dt><dd>Confirmed by automated rule</dd><dt>Reference</dt><dd><span class="refline">clearmap-db-uri-credentials (gitleaks rule)</span></dd></dl></div></details>
+<details class="finding" open style="border-left-color:#b91c1c"><summary><span class="chip" style="background:#b91c1c">Critical</span> <span>Unguarded PHI read endpoint (no authentication)</span></summary><div class="body"><dl><dt>Location</dt><dd><span class="loc">backend/api/patients.py:13</span></dd><dt>Regulation</dt><dd><a href="https://www.ecfr.gov/current/title-45/section-164.312">45 CFR 164.312(d): Person or entity authentication (HIPAA Security Rule requirement)</a></dd><dt>Evidence</dt><dd><code>@router.get(&quot;/patients/{patient_id}&quot;)</code> <span class="srcnote">(redacted, no raw PHI)</span></dd><dt>Why it matters</dt><dd>No authentication dependency on a PHI route.</dd><dt>Reviewer question</dt><dd>Is every PHI access authenticated?</dd><dt>Remediation</dt><dd>Require an authenticated principal on every PHI route.</dd><dt>Verification</dt><dd>Confirmed by automated rule</dd><dt>Reference</dt><dd><span class="refline">access-fastapi-unauthenticated-phi-read (semgrep rule)</span></dd></dl></div></details>
+<details class="finding" open style="border-left-color:#c2410c"><summary><span class="chip" style="background:#c2410c">High</span> <span>PHI create without audit event</span></summary><div class="body"><dl><dt>Location</dt><dd><span class="loc">backend/api/patients.py:30</span></dd><dt>Regulation</dt><dd><a href="https://www.ecfr.gov/current/title-45/section-164.312">45 CFR 164.312(b): Audit controls (HIPAA Security Rule requirement)</a></dd><dt>Evidence</dt><dd><code>_PATIENTS[patient[&quot;id&quot;]] = patient</code> <span class="srcnote">(redacted, no raw PHI)</span></dd><dt>Why it matters</dt><dd>A new patient record is written with no audit event.</dd><dt>Reviewer question</dt><dd>Is every PHI write recorded with actor + action + resource?</dd><dt>Remediation</dt><dd>Emit an audit event on every PHI create/read/update/delete.</dd><dt>Verification</dt><dd>Identified by AI-assisted review, requires human verification (high confidence)</dd><dt>Reference</dt><dd><span class="refline">AUDIT-01</span></dd></dl></div></details>
+<details class="finding" open style="border-left-color:#c2410c"><summary><span class="chip" style="background:#c2410c">High</span> <span>PHI transmitted over cleartext to an external host</span></summary><div class="body"><dl><dt>Location</dt><dd><span class="loc">backend/integrations.py:15</span></dd><dt>Regulation</dt><dd><a href="https://www.ecfr.gov/current/title-45/section-164.312">45 CFR 164.312(e)(1): Transmission security (HIPAA Security Rule requirement)</a></dd><dt>Evidence</dt><dd><code>resp = requests.get(f&quot;http://labs.partner-network.example/...&quot;)</code> <span class="srcnote">(redacted, no raw PHI)</span></dd><dt>Why it matters</dt><dd>PHI travels over plain http to an external host.</dd><dt>Reviewer question</dt><dd>Is all PHI encrypted in transit on every external path?</dd><dt>Remediation</dt><dd>Use https/TLS for every PHI transmission.</dd><dt>Verification</dt><dd>Confirmed by automated rule</dd><dt>Reference</dt><dd><span class="refline">transit-external-cleartext-url (semgrep rule)</span></dd></dl></div></details>
+<h2><span class="secno">7</span>AI / LLM / RAG findings</h2>
+<details class="finding" open style="border-left-color:#b91c1c"><summary><span class="chip" style="background:#b91c1c">Critical</span> <span>Unredacted PHI interpolated into LLM prompt</span></summary><div class="body"><dl><dt>Location</dt><dd><span class="loc">backend/rag/assistant.py:24</span></dd><dt>Regulation</dt><dd><a href="https://www.federalregister.gov/documents/2024/01/09/2023-28857/health-data-technology-and-interoperability-certification-program-updates-algorithm-transparency-and">45 CFR 170.315(b)(11) (ONC HTI-1): Decision support intervention transparency (ONC certification criterion)</a></dd><dt>Evidence</dt><dd><code>prompt = f&quot;Patient {name} ({mrn}): {note}&quot;</code> <span class="srcnote">(redacted, no raw PHI)</span></dd><dt>Why it matters</dt><dd>Raw identifiers flow into the model prompt without redaction.</dd><dt>Reviewer question</dt><dd>Is PHI redacted before prompts, output cited + bounded to sources, and model calls audited?</dd><dt>Remediation</dt><dd>Redact/tokenize PHI before prompt construction.</dd><dt>Verification</dt><dd>Identified by AI-assisted review, requires human verification (high confidence)</dd><dt>Reference</dt><dd><span class="refline">AI-RAG-01</span></dd></dl></div></details>
+<details class="finding" open style="border-left-color:#a16207"><summary><span class="chip" style="background:#a16207">Medium</span> <span>No abstain path on weak retrieval</span></summary><div class="body"><dl><dt>Location</dt><dd><span class="loc">backend/rag/assistant.py:41</span></dd><dt>Evidence</dt><dd><code>answer = llm_client.complete(prompt)</code> <span class="srcnote">(redacted, no raw PHI)</span></dd><dt>Why it matters</dt><dd>The assistant answers even when retrieval is empty.</dd><dt>Reviewer question</dt><dd>Is PHI redacted before prompts, output cited + bounded to sources, and model calls audited?</dd><dt>Remediation</dt><dd>Abstain or surface low confidence on weak retrieval.</dd><dt>Verification</dt><dd>Identified by AI-assisted review, requires human verification (medium confidence)</dd><dt>Reference</dt><dd><span class="refline">AI-RAG-02</span></dd></dl></div></details>
+<h2><span class="secno">8</span>What an enterprise reviewer will ask</h2>
+<ul class="qs">
+<li><strong>ACCESS:</strong> Are PHI actions restricted to permitted roles, and sessions revocable?</li>
+<li><strong>AI-RAG:</strong> Is PHI redacted before prompts, output cited + bounded to sources, and model calls audited?</li>
+<li><strong>AUDIT:</strong> Is every PHI access and model call recorded to an audit trail?</li>
+<li><strong>AUTH:</strong> Is every PHI access authenticated?</li>
+<li><strong>SECRETS:</strong> Are all credentials loaded from a secret manager rather than source?</li>
+<li><strong>TRANSIT:</strong> Is all PHI encrypted in transit on every external path?</li>
+</ul>
+<h2><span class="secno">9</span>Regulatory citations referenced</h2>
+<p class="para">Findings in this report map to the following requirements (regulatory baseline 2026.1).</p>
+<table><thead><tr><th>Citation</th><th>Requirement</th><th>Status</th><th>Source</th></tr></thead><tbody>
+<tr><td>45 CFR 164.312(a)(2)(i)</td><td>Unique user identification</td><td>HIPAA Security Rule requirement</td><td class="url"><a href="https://www.ecfr.gov/current/title-45/section-164.312">www.ecfr.gov/current/title-45/section-164.312</a></td></tr>
+<tr><td>45 CFR 170.315(b)(11) (ONC HTI-1)</td><td>Decision support intervention transparency</td><td>ONC certification criterion</td><td class="url"><a href="https://www.federalregister.gov/documents/2024/01/09/2023-28857/health-data-technology-and-interoperability-certification-program-updates-algorithm-transparency-and">www.federalregister.gov/documents/2024/01/09/2023-28857/health-data-technology-and-interoperability-certification-program-updates-algorithm-transparency-and</a></td></tr>
+<tr><td>45 CFR 164.312(d)</td><td>Person or entity authentication</td><td>HIPAA Security Rule requirement</td><td class="url"><a href="https://www.ecfr.gov/current/title-45/section-164.312">www.ecfr.gov/current/title-45/section-164.312</a></td></tr>
+<tr><td>45 CFR 164.312(b)</td><td>Audit controls</td><td>HIPAA Security Rule requirement</td><td class="url"><a href="https://www.ecfr.gov/current/title-45/section-164.312">www.ecfr.gov/current/title-45/section-164.312</a></td></tr>
+<tr><td>45 CFR 164.312(e)(1)</td><td>Transmission security</td><td>HIPAA Security Rule requirement</td><td class="url"><a href="https://www.ecfr.gov/current/title-45/section-164.312">www.ecfr.gov/current/title-45/section-164.312</a></td></tr>
+<tr><td>45 CFR 164.312(a)(1)</td><td>Access control</td><td>HIPAA Security Rule requirement</td><td class="url"><a href="https://www.ecfr.gov/current/title-45/section-164.312">www.ecfr.gov/current/title-45/section-164.312</a></td></tr>
+</tbody></table>
+<ul class="notes">
+<li>Although encryption is an Addressable spec ((e)(2)(ii) in transit, (a)(2)(iv) at rest), the parent standard 164.312(e)(1) Transmission Security is Required. For ePHI over open/public networks there is no reasonable equivalent to encryption, and OCR treats unencrypted transmission over open networks as a violation. ClearMap therefore treats encryption-in-transit as REQUIRED and anchors TRANSIT findings to the Required standard 164.312(e)(1).</li>
+<li>A certification criterion for developers of ONC-certified health IT (Decision Support Interventions), not a universal HIPAA requirement for every healthcare application. ClearMap uses it as the engineering authority for clinical AI/LLM reliability and transparency; whether it legally applies to a given product depends on whether that product is, or integrates, certified health IT. Counsel confirms.</li>
+</ul>
+<h2><span class="secno">A</span>Appendix A: How the score is built</h2>
+<div class="build"><ul><li><strong>Findings mix:</strong> 4 confirmed by automated rules + 3 identified by AI-assisted review (marked <em>Needs verification</em>).</li><li><strong>Rule-confirmed composite:</strong> 94/100, computed from automated-rule findings only (reproducible: same input, same number).</li><li><strong>With AI-assisted findings included:</strong> 82/100 before the severity cap.</li><li><strong>Severity cap:</strong> 51/100 (3 critical findings). The reported score is the lower of the two.</li><li><strong>Method:</strong> each category starts at 100 and loses points per finding by severity. The overall score is a weighted composite across the categories that apply (categories that do not apply are excluded, not scored 100), then capped by the worst severity present: one critical finding caps the score at 75, and additional criticals lower the cap further with diminishing returns toward a floor of 40. ClearMap never reports a perfect score because it checks technical safeguards only.</li></ul></div>
+<h2><span class="secno">B</span>Appendix B: About this report</h2>
+<footer class="disclaimer">ClearMap is a <strong>technical risk signal, not a legal HIPAA compliance certification.</strong>
+A ClearMap score does not mean a product is or is not HIPAA compliant. ClearMap
+does not cover administrative safeguards (45 CFR 164.308), physical safeguards
+(164.310), BAAs, organizational policy, or a full risk analysis, and does not
+replace a security review, a penetration test, or counsel. Regulatory citations
+are an engineering target; counsel must confirm them.</footer>
+<div class="cta">Prepared with ClearMap, an open-source HIPAA technical-risk scanner by Vantage IO. An automated scan is the baseline. A full reliability assessment goes further: deeper and broader detection coverage, expert verification of every finding, and review of the safeguards no automated tool can see. When your team is ready for that step, visit <a href="https://vantageio.com">vantageio.com</a>.</div>
+</div></body></html>

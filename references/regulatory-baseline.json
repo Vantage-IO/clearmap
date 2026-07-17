@@ -1,0 +1,84 @@
+{
+  "baseline_version": "2026.1",
+  "as_of": "2026-06-01",
+  "description": "Versioned snapshot of the regulatory requirements ClearMap findings are mapped against. Every finding's hipaa_ref must resolve to a citation in `regulations` below. Reports stamp this baseline_version so any assessment is traceable to the exact requirement set (and its effective dates) in force when it was produced. Bump the version when a regulation is amended or a pending change finalizes; keep prior versions for diffing.",
+  "disclaimer": "Engineering target, not legal advice. ClearMap is a technical risk signal, not a HIPAA compliance certification. Counsel must confirm citations before any external claim.",
+  "interpretation_notes": {
+    "addressable_is_not_optional": "Per 45 CFR 164.306(d)(3), an 'Addressable' implementation specification is NOT optional. A covered entity/BA must either implement it, OR document why it is not reasonable and appropriate AND implement an equivalent alternative measure. 'Addressable' is a flexibility mechanism, not a waiver.",
+    "encryption_in_transit_is_effectively_required": "Although encryption is an Addressable spec ((e)(2)(ii) in transit, (a)(2)(iv) at rest), the parent standard 164.312(e)(1) Transmission Security is Required. For ePHI over open/public networks there is no reasonable equivalent to encryption, and OCR treats unencrypted transmission over open networks as a violation. ClearMap therefore treats encryption-in-transit as REQUIRED and anchors TRANSIT findings to the Required standard 164.312(e)(1).",
+    "internal_cleartext_is_advisory": "Cleartext PHI on an INTERNAL hop inside a trusted boundary (behind a VPC / load balancer, private subnet, service mesh) is a common, currently-defensible pattern: under 164.306(d)(3) an entity may document it and rely on compensating controls (network segmentation, access control). ClearMap classifies a host as internal via localhost / RFC-1918 (10., 172.16-31., 192.168.) / *.internal / *.svc.cluster.local, and reports internal cleartext PHI as a LOW-severity ADVISORY (verify trusted boundary; zero-trust best practice is TLS/mTLS internally too). EXTERNAL cleartext PHI remains a hard finding. Internal traffic with no PHI is not reported at all."
+  },
+  "frameworks": {
+    "hipaa-security-technical": {
+      "name": "HIPAA Security Rule — Technical Safeguards",
+      "citation_root": "45 CFR 164.312",
+      "origin": "Security Rule (2003); current text from 2013 Omnibus Rule",
+      "last_amended": "2013-01-25 (78 FR 5566)",
+      "retrieved": "2026-06-01",
+      "sources": [
+        "https://www.ecfr.gov/current/title-45/section-164.312",
+        "https://www.law.cornell.edu/cfr/text/45/164.312"
+      ]
+    },
+    "ocr-online-tracking": {
+      "name": "HHS OCR — Use of Online Tracking Technologies by HIPAA Covered Entities",
+      "origin": "OCR bulletin, Dec 2022; updated Mar 2024",
+      "retrieved": "2026-06-01",
+      "sources": [
+        "https://www.hhs.gov/hipaa/for-professionals/privacy/guidance/hipaa-online-tracking/index.html"
+      ]
+    },
+    "onc-hti-1": {
+      "name": "ONC HTI-1 — Decision Support Intervention (DSI) transparency criterion",
+      "citation_root": "45 CFR 170.315(b)(11)",
+      "origin": "HTI-1 final rule",
+      "last_amended": "2024-01-09 (89 FR 1192)",
+      "retrieved": "2026-06-01",
+      "sources": [
+        "https://www.federalregister.gov/documents/2024/01/09/2023-28857/health-data-technology-and-interoperability-certification-program-updates-algorithm-transparency-and"
+      ]
+    },
+    "owasp-appsec": {
+      "name": "OWASP / CWE application-security weaknesses",
+      "origin": "OWASP Top 10 and MITRE CWE",
+      "retrieved": "2026-06-01",
+      "sources": [
+        "https://owasp.org/Top10/",
+        "https://cwe.mitre.org/"
+      ]
+    }
+  },
+  "regulations": {
+    "164.312(a)(1)": {"framework": "hipaa-security-technical", "title": "Access control (standard)", "status": "required"},
+    "164.312(a)(2)(i)": {"framework": "hipaa-security-technical", "title": "Unique user identification", "status": "required"},
+    "164.312(a)(2)(iii)": {"framework": "hipaa-security-technical", "title": "Automatic logoff", "status": "addressable"},
+    "164.312(a)(2)(iv)": {"framework": "hipaa-security-technical", "title": "Encryption and decryption", "status": "addressable", "addressable_ref": "164.306(d)(3)", "clearmap_treatment": "required", "clearmap_rationale": "Addressable != optional; no reasonable alternative to encrypting ePHI at rest in most environments.", "pending": "NPRM-2024-30983"},
+    "164.312(b)": {"framework": "hipaa-security-technical", "title": "Audit controls (standard)", "status": "required"},
+    "164.312(c)(1)": {"framework": "hipaa-security-technical", "title": "Integrity (standard)", "status": "required"},
+    "164.312(c)(2)": {"framework": "hipaa-security-technical", "title": "Mechanism to authenticate ePHI", "status": "addressable"},
+    "164.312(d)": {"framework": "hipaa-security-technical", "title": "Person or entity authentication (standard)", "status": "required"},
+    "164.312(e)(1)": {"framework": "hipaa-security-technical", "title": "Transmission security (standard)", "status": "required"},
+    "164.312(e)(2)(ii)": {"framework": "hipaa-security-technical", "title": "Encryption (in transit)", "status": "addressable", "addressable_ref": "164.306(d)(3)", "clearmap_treatment": "required", "clearmap_rationale": "Parent standard 164.312(e)(1) is Required; Addressable != optional; no reasonable equivalent to encryption for ePHI over open networks; OCR enforces.", "pending": "NPRM-2024-30983"},
+    "164.306(d)(3)": {"framework": "hipaa-security-technical", "title": "Implementation of addressable specifications (assess; implement, or document + equivalent alternative)", "status": "required"},
+    "OCR online-tracking guidance": {"framework": "ocr-online-tracking", "title": "Online tracking technologies in patient-facing surfaces", "status": "guidance", "authority_type": "ocr-guidance", "applies_when": ["covered-entity", "business-associate"], "scope_note": "Sub-regulatory OCR guidance, not a regulation. In 2024 a federal court (American Hospital Association v. Becerra, N.D. Tex.) vacated OCR's position that tracking on UNAUTHENTICATED public webpages is regulated PHI; OCR's guidance on AUTHENTICATED, PHI-bearing surfaces stands. ClearMap flags tracking that ties health context to an identifiable patient (the durable concern); treat tracking on public marketing pages as lower risk and confirm with counsel."},
+    "ONC HTI-1 170.315(b)(11)": {"framework": "onc-hti-1", "title": "Decision support intervention transparency", "status": "certification criterion", "authority_type": "onc-certification-criterion", "applies_when": ["certified-health-it-developer"], "scope_note": "A certification criterion for developers of ONC-certified health IT (Decision Support Interventions), not a universal HIPAA requirement for every healthcare application. ClearMap uses it as the engineering authority for clinical AI/LLM reliability and transparency; whether it legally applies to a given product depends on whether that product is, or integrates, certified health IT. Counsel confirms."},
+    "CWE-89": {"framework": "owasp-appsec", "title": "SQL Injection", "status": "best practice", "authority_type": "security-best-practice", "scope_note": "General application-security weakness, not a HIPAA citation. In a system holding ePHI, SQL injection can defeat access control (164.312(a)) and data integrity (164.312(c)); ClearMap reports it as a security best practice with clinical impact."},
+    "CWE-78": {"framework": "owasp-appsec", "title": "OS Command Injection", "status": "best practice", "authority_type": "security-best-practice", "scope_note": "General application-security weakness. Command injection yields remote code execution, defeating every technical safeguard over ePHI (164.312). Security best practice with clinical impact."},
+    "CWE-918": {"framework": "owasp-appsec", "title": "Server-Side Request Forgery (SSRF)", "status": "best practice", "authority_type": "security-best-practice", "scope_note": "General application-security weakness. SSRF can exfiltrate ePHI or reach internal services, undermining transmission security (164.312(e)) and access control (164.312(a))."},
+    "CWE-22": {"framework": "owasp-appsec", "title": "Path Traversal", "status": "best practice", "authority_type": "security-best-practice", "scope_note": "General application-security weakness. Path traversal on a document store can read or overwrite arbitrary patient files, defeating access control (164.312(a)) and integrity (164.312(c))."},
+    "CWE-502": {"framework": "owasp-appsec", "title": "Deserialization of Untrusted Data", "status": "best practice", "authority_type": "security-best-practice", "scope_note": "General application-security weakness. Unsafe deserialization yields remote code execution over systems handling ePHI (164.312). Security best practice with clinical impact."},
+    "CWE-16": {"framework": "owasp-appsec", "title": "Security Misconfiguration (CORS / debug exposure)", "status": "best practice", "authority_type": "security-best-practice", "scope_note": "General application-security weakness. Wildcard CORS with credentials or a production debug endpoint can expose ePHI and defeat access control (164.312(a)); ClearMap reports it as a security best practice."}
+  },
+  "pending_changes": [
+    {
+      "id": "NPRM-2024-30983",
+      "title": "HIPAA Security Rule To Strengthen the Cybersecurity of Electronic Protected Health Information",
+      "published": "2025-01-06 (90 FR 898)",
+      "comment_close": "2025-03-07",
+      "status": "proposed — NOT final as of 2026-06-01",
+      "effect": "Would promote encryption to a Required standalone technical-safeguard standard (at rest and in transit) and remove the Required/Addressable distinction (all implementation specs become required, with limited exceptions).",
+      "clearmap_stance": "ClearMap already treats encryption-in-transit/at-rest as effectively required, consistent with the NPRM direction and OCR enforcement reality.",
+      "source_url": "https://www.federalregister.gov/documents/2025/01/06/2024-30983/hipaa-security-rule-to-strengthen-the-cybersecurity-of-electronic-protected-health-information"
+    }
+  ]
+}

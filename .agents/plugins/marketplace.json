@@ -1,0 +1,21 @@
+{
+  "name": "vantage-io",
+  "owner": {
+    "name": "Vantage IO",
+    "url": "https://vantageio.com"
+  },
+  "metadata": {
+    "description": "Vantage IO open-source developer tools for agentic coding environments."
+  },
+  "plugins": [
+    {
+      "name": "clearmap",
+      "version": "0.3.0",
+      "source": "github:vantage-io/clearmap",
+      "description": "HIPAA-aware healthcare development guidance and technical-risk auditing inside your coding agent.",
+      "license": "Apache-2.0",
+      "homepage": "https://github.com/vantage-io/clearmap",
+      "skills": "./skills/"
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clearmap"
+dynamic = ["version"]
+description = "Local-first HIPAA technical-risk scanner for healthcare codebases. Technical risk signal, not a compliance certification."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Vantage IO", email = "smorhaim@vantageio.com" }]
+keywords = ["hipaa", "phi", "healthcare", "security", "clinical-ai", "semgrep", "gitleaks"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Healthcare Industry",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+]
+# Core is stdlib-only by design (local-first, zero runtime dependencies).
+dependencies = []
+
+[project.optional-dependencies]
+presidio = ["presidio-analyzer>=2.2"]
+dev = ["ruff>=0.4"]
+
+[project.urls]
+Homepage = "https://github.com/vantage-io/clearmap"
+
+[project.scripts]
+clearmap = "clearmap.cli:main"
+
+# The repo keeps its flat scripts/ + rules/ + references/ layout (the plugin
+# and `python3 scripts/x.py` depend on it); packaging maps those directories
+# into the `clearmap` package. scan.py/report.py resolve data paths for both
+# layouts. Editable installs (`pip install -e .`) use the repo layout as-is.
+[tool.setuptools]
+packages = ["clearmap", "clearmap.rules", "clearmap.references"]
+
+[tool.setuptools.package-dir]
+"clearmap" = "scripts"
+"clearmap.rules" = "rules"
+"clearmap.references" = "references"
+
+[tool.setuptools.package-data]
+"clearmap.rules" = ["*.yaml", "*.toml"]
+"clearmap.references" = ["*.json", "*.md"]
+
+[tool.setuptools.dynamic]
+version = { attr = "clearmap._version.__version__" }
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+ignore = ["E402"]  # scripts insert their own dir on sys.path before imports

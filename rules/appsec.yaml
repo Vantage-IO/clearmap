@@ -1,0 +1,139 @@
+# APPSEC - deterministic application-security rules (OWASP / CWE).
+#
+# Precision-first: each rule keys on a high-confidence sink with a clearly
+# untrusted or dynamic argument. Parameterized queries, argument-list process
+# calls, path-normalized reads, safe deserializers, and specific CORS origins
+# must NOT match. Authority is security-best-practice; the report notes when the
+# weakness undermines a HIPAA safeguard (see scope_note on each CWE citation).
+
+rules:
+  - id: appsec-sql-injection-python
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Untrusted or dynamic string is built into a raw SQL statement (f-string,
+      concatenation, %, or .format) and executed. Use parameterized queries so a
+      value can never change the query. In a PHI system this can defeat access
+      control and integrity.
+    metadata:
+      clearmap_category: APPSEC
+      clearmap_severity: critical
+      clearmap_title: SQL injection via string-built query
+      hipaa_ref: CWE-89
+      remediation: Use parameterized queries / bound parameters; never interpolate values into SQL.
+    patterns:
+      - pattern-either:
+          - pattern: $X.execute(f"...", ...)
+          - pattern: $X.executemany(f"...", ...)
+          - pattern: $X.execute($A + $B, ...)
+          - pattern: $X.execute($A % $B, ...)
+          - pattern: $X.execute("...".format(...), ...)
+          - pattern: text(f"...")
+
+  - id: appsec-command-injection-python
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A shell command is built from a dynamic string (f-string or concatenation)
+      and executed through a shell. This allows command injection and remote code
+      execution. Pass an argument list without a shell, or strictly validate input.
+    metadata:
+      clearmap_category: APPSEC
+      clearmap_severity: critical
+      clearmap_title: OS command injection via shell
+      hipaa_ref: CWE-78
+      remediation: Use subprocess with an argument list and shell=False; never build shell strings from input.
+    patterns:
+      - pattern-either:
+          - pattern: os.system(f"...")
+          - pattern: os.system($A + $B)
+          - pattern: os.popen(f"...")
+          - pattern: os.popen($A + $B)
+          - pattern: subprocess.$M(f"...", ..., shell=True, ...)
+          - pattern: subprocess.$M($A + $B, ..., shell=True, ...)
+
+  - id: appsec-ssrf-request-url-python
+    languages: [python]
+    severity: WARNING
+    message: >-
+      An outbound HTTP request uses a URL taken directly from request input with
+      no allowlist or validation (SSRF). An attacker can pivot to internal
+      services or exfiltrate data. Validate the host against an allowlist first.
+    metadata:
+      clearmap_category: APPSEC
+      clearmap_severity: high
+      clearmap_title: Server-side request forgery (user-controlled URL)
+      hipaa_ref: CWE-918
+      remediation: Validate the URL host against an allowlist before fetching; reject internal/link-local targets.
+    patterns:
+      - pattern-either:
+          - pattern: requests.$M($URL, ...)
+          - pattern: httpx.$M($URL, ...)
+          - pattern: urllib.request.urlopen($URL, ...)
+      - metavariable-pattern:
+          metavariable: $URL
+          patterns:
+            - pattern-either:
+                - pattern: $REQ.query_params[...]
+                - pattern: $REQ.args.get(...)
+                - pattern: $REQ.args[...]
+                - pattern: $REQ.GET[...]
+                - pattern: $REQ.json()[...]
+
+  - id: appsec-path-traversal-python
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A file path is joined directly from request input with no normalization or
+      boundary check, allowing path traversal to read or write arbitrary patient
+      files. Resolve and confirm the path stays inside the document root.
+    metadata:
+      clearmap_category: APPSEC
+      clearmap_severity: high
+      clearmap_title: Path traversal from unsanitized input
+      hipaa_ref: CWE-22
+      remediation: Use os.path.basename or resolve + verify the path is within the intended directory.
+    patterns:
+      - pattern-either:
+          - pattern: open(os.path.join($ROOT, $REQ.query_params[...]), ...)
+          - pattern: open(os.path.join($ROOT, $REQ.args.get(...)), ...)
+          - pattern: open(os.path.join($ROOT, $REQ.args[...]), ...)
+          - pattern: open(f"...{$REQ.query_params[...]}...", ...)
+
+  - id: appsec-unsafe-deserialization-python
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Untrusted data is deserialized with pickle or an unsafe YAML loader, which
+      can execute arbitrary code. Use a safe format (json) or yaml.safe_load.
+    metadata:
+      clearmap_category: APPSEC
+      clearmap_severity: critical
+      clearmap_title: Unsafe deserialization of untrusted data
+      hipaa_ref: CWE-502
+      remediation: Deserialize with json or yaml.safe_load; never unpickle untrusted input.
+    patterns:
+      - pattern-either:
+          - pattern: pickle.loads(...)
+          - pattern: pickle.load(...)
+          - pattern: cPickle.loads(...)
+          - pattern: yaml.load($X)
+
+  - id: appsec-permissive-cors-credentials-python
+    languages: [python]
+    severity: WARNING
+    message: >-
+      CORS is configured to allow any origin together with credentials, or a
+      production debug endpoint is enabled. Either can expose PHI to any site.
+      Set an explicit origin allowlist and disable debug in production.
+    metadata:
+      clearmap_category: APPSEC
+      clearmap_severity: high
+      clearmap_title: Permissive CORS with credentials or debug enabled
+      hipaa_ref: CWE-16
+      remediation: List explicit trusted origins; never combine wildcard origin with credentials; disable debug in prod.
+    patterns:
+      - pattern-either:
+          - pattern: $APP.add_middleware(CORSMiddleware, ..., allow_origins=["*"], ..., allow_credentials=True, ...)
+          - pattern: $APP.add_middleware(CORSMiddleware, ..., allow_credentials=True, ..., allow_origins=["*"], ...)
+          - pattern: $APP.run(..., debug=True, ...)

@@ -1,0 +1,43 @@
+# ClearMap Gitleaks config — SECRETS category (+ ACCESS-01 hardcoded creds).
+# Extends the gitleaks default ruleset (OpenAI sk- keys, generic secrets, etc.)
+# with healthcare-specific patterns.
+title = "ClearMap gitleaks config"
+
+[extend]
+useDefault = true
+
+# Vendored / generated / binary-adjacent paths: secrets never live here, but
+# base64 blobs and content hashes in them constantly trip entropy rules.
+# (Top real-repo false-positive source — see runbooks/build-state.md.)
+[allowlist]
+paths = [
+  '''\.svg$''',
+  '''\.(png|jpe?g|gif|ico|webp|woff2?|ttf|otf|eot)$''',
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)yarn\.lock$''',
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''(^|/)Cargo\.lock$''',
+  '''(^|/)poetry\.lock$''',
+  '''(^|/)node_modules/''',
+  '''\.min\.(js|css)(\.map)?$''',
+  '''\.(js|css)\.map$''',
+  '''(^|/)__snapshots__/''',
+]
+
+[[rules]]
+id = "clearmap-ehr-api-key"
+description = "Hardcoded EHR/FHIR API key"
+regex = '''ehr_(?:live|test)_[A-Za-z0-9]{8,}'''
+keywords = ["ehr_live", "ehr_test"]
+
+[[rules]]
+id = "clearmap-db-uri-credentials"
+description = "Database connection string with embedded credentials"
+regex = '''[a-zA-Z][a-zA-Z0-9+.-]*://[^:@/\s]+:[^@/\s]{3,}@[^\s"']+'''
+keywords = ["://"]
+
+[[rules]]
+id = "clearmap-django-secret-key"
+description = "Hardcoded Django/Flask signing secret"
+regex = '''django-insecure-[A-Za-z0-9_\-]{20,}'''
+keywords = ["django-insecure-"]

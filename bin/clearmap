@@ -1,0 +1,8 @@
+#!/bin/sh
+# ClearMap launcher. Resolves the installed plugin root and runs the bundled
+# Python CLI, so the command works from a plugin cache without a source checkout
+# or a pip install. Honors the host-provided plugin-root env vars, else derives
+# the root from this script's location (bin/ sits at the plugin root).
+SELF="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+ROOT="${CLEARMAP_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-${PLUGIN_ROOT:-$(dirname -- "$SELF")}}}"
+exec python3 "$ROOT/scripts/cli.py" "$@"

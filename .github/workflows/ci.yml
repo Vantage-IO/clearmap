@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Release hardening: before tagging a release, pin the third-party actions below
+# to full commit SHAs (e.g. actions/checkout@<sha>  # v4.2.2). They are left as
+# version tags here rather than pinned to an unverified SHA.
+
+env:
+  # Calibrated engine pins (checked against init.py ENGINE_PINS by test_version.py).
+  SEMGREP_VERSION: "1.164.0"
+  GITLEAKS_VERSION: "8.30.1"
+
+jobs:
+  test:
+    name: Unit tests (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install pinned engines
+        run: bash .github/install-engines.sh
+      - name: Run test suite
+        run: python3 -m unittest discover -s tests -v
+
+  lint:
+    name: Lint + rule validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pipx run ruff check scripts tests
+      - name: Validate Semgrep rules
+        run: pipx run "semgrep==${SEMGREP_VERSION}" --validate --config rules/
+
+  calibration:
+    name: Calibration gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install pinned engines
+        run: bash .github/install-engines.sh
+      - name: Fixture manifests are generated, never hand-edited
+        run: |
+          python3 examples/build_manifest.py
+          git diff --exit-code examples/*/expected-findings.json
+      - name: Deterministic recall/precision on the vulnerable fixture
+        # Gate = the measured recall/precision baseline. When detection
+        # coverage improves, RAISE --min-recall here; never lower it.
+        run: |
+          python3 scripts/scan.py examples/vulnerable-health-app --out /tmp/vuln.json
+          python3 scripts/calibrate.py \
+            --expected examples/vulnerable-health-app/expected-findings.json \
+            --candidate /tmp/vuln.json --source deterministic \
+            --min-recall 0.94 --min-precision 1.0
+      - name: Zero false positives on the safe fixture
+        run: |
+          python3 scripts/scan.py examples/safe-health-app --out /tmp/safe.json
+          python3 - <<'EOF'
+          import json
+          n = len(json.load(open("/tmp/safe.json"))["findings"])
+          assert n == 0, f"safe-health-app produced {n} findings (false-positive budget is 0)"
+          print("safe fixture: 0 findings")
+          EOF
+      - name: Report renders and banned-phrase guard holds
+        run: |
+          python3 scripts/report.py tests/fixtures/golden/findings.json \
+            --repo ci --date 2026-01-01 --format both --out /tmp/ci-report.md
+          test -s /tmp/ci-report.md && test -s /tmp/ci-report.html
+
+  package:
+    name: Build + install smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build sdist + wheel
+        run: |
+          pip install build
+          python -m build
+      - name: Install the wheel into a clean venv and smoke-test it
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install dist/*.whl
+          /tmp/venv/bin/clearmap --version
+          /tmp/venv/bin/clearmap report tests/fixtures/golden/findings.json \
+            --repo ci --date 2026-01-01 --format both --out /tmp/pkg-report.md
+          test -s /tmp/pkg-report.md && test -s /tmp/pkg-report.html
+          # packaged rules + references resolve from the installed layout
+          /tmp/venv/bin/python -c "import clearmap._version as v; print('clearmap', v.__version__)"
+      - name: Generate an SBOM for the built wheel
+        run: |
+          pipx run cyclonedx-bom -e -o /tmp/sbom.json || \
+            echo "SBOM step is advisory; cyclonedx-bom unavailable"
+      - name: Upload artifacts (wheel + SBOM)
+        uses: actions/upload-artifact@v4
+        with:
+          name: clearmap-dist
+          path: |
+            dist/*
+            /tmp/sbom.json
+        if: always()

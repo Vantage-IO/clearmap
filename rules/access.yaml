@@ -1,0 +1,200 @@
+# ACCESS / AUTH / INTEGRITY — deterministic Category A rules.
+#
+# Precision-first: every rule here keys on STRUCTURE (a PHI-named route with no
+# auth dependency in the same decorator/function shape), never on semantic
+# judgment. What regex cannot judge stays reasoning-led by design:
+#   - ACCESS-02 (role check on an already-authenticated action) — whether a
+#     given role SHOULD be allowed is an authorization-policy question.
+#   - Express apps with app.use(auth) global middleware — see the caveat in the
+#     express rule message (capped at HIGH for exactly that reason).
+#
+# PHI route lexicon shared by the route rules:
+#   patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg
+
+rules:
+  - id: access-fastapi-unauthenticated-phi-read
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A PHI read route has no authentication dependency (no Depends(...) parameter
+      and no dependencies=[...]), so any unauthenticated caller can read charts.
+      164.312(d) requires verifying the identity of anyone accessing ePHI.
+    metadata:
+      clearmap_category: AUTH
+      clearmap_severity: critical
+      clearmap_title: Unguarded PHI read endpoint (no authentication)
+      hipaa_ref: 164.312(d)
+      remediation: Require an authenticated principal (e.g. Depends(current_user)) on every PHI route.
+    patterns:
+      - pattern: |
+          @$R.get($PATH)
+          def $FN(...):
+              ...
+      - pattern-not: |
+          @$R.get($PATH)
+          def $FN(..., $U=Depends(...), ...):
+              ...
+      - pattern-not: |
+          @$R.get($PATH, dependencies=$DEPS)
+          def $FN(...):
+              ...
+      - metavariable-pattern:
+          metavariable: $PATH
+          patterns:
+            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg)
+
+  - id: access-fastapi-unauthenticated-phi-mutation
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A PHI mutating route (POST/PUT/PATCH/DELETE) has no authentication dependency,
+      so any caller can alter or destroy clinical data. Implicates integrity
+      (164.312(c)(1)) as well as authentication (164.312(d)).
+    metadata:
+      clearmap_category: INTEGRITY
+      clearmap_severity: critical
+      clearmap_title: Unauthenticated mutation of PHI
+      hipaa_ref: 164.312(c)(1)
+      remediation: Require authentication + authorization on every mutating PHI endpoint.
+    patterns:
+      - pattern: |
+          @$R.$METHOD($PATH)
+          def $FN(...):
+              ...
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(post|put|patch|delete)$
+      - pattern-not: |
+          @$R.$METHOD($PATH)
+          def $FN(..., $U=Depends(...), ...):
+              ...
+      - pattern-not: |
+          @$R.$METHOD($PATH, dependencies=$DEPS)
+          def $FN(...):
+              ...
+      - metavariable-pattern:
+          metavariable: $PATH
+          patterns:
+            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg)
+
+  - id: access-flask-unauthenticated-phi-route
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A Flask PHI route has only the @route decorator — no auth decorator
+      (@login_required / @jwt_required / ...) guards it, so any caller can reach
+      PHI. If auth is enforced elsewhere (e.g. a before_request hook), suppress
+      with `# clearmap:allow access-flask-unauthenticated-phi-route`.
+    metadata:
+      clearmap_category: AUTH
+      clearmap_severity: critical
+      clearmap_title: Unguarded Flask PHI route (no auth decorator)
+      hipaa_ref: 164.312(d)
+      remediation: Guard PHI routes with an auth decorator or a global before_request auth hook.
+    patterns:
+      - pattern: |
+          @$APP.route($PATH, ...)
+          def $FN(...):
+              ...
+      - pattern-not: |
+          @$APP.route($PATH, ...)
+          @$AUTH
+          def $FN(...):
+              ...
+      - pattern-not: |
+          @$APP.route($PATH, ...)
+          @$AUTH(...)
+          def $FN(...):
+              ...
+      - metavariable-pattern:
+          metavariable: $PATH
+          patterns:
+            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg)
+
+  - id: access-express-unauthenticated-phi-route
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      An Express PHI route is registered with a bare handler — no inline auth
+      middleware. HIGH (not critical) because auth may be applied globally via
+      app.use(...); verify that a global auth middleware covers this route, or
+      suppress with `// clearmap:allow access-express-unauthenticated-phi-route`.
+    metadata:
+      clearmap_category: AUTH
+      clearmap_severity: high
+      clearmap_title: Express PHI route without inline auth middleware
+      hipaa_ref: 164.312(d)
+      remediation: Apply auth middleware (inline or app.use) ahead of every PHI route handler.
+    patterns:
+      - pattern-either:
+          - pattern: $APP.$METHOD($PATH, ($REQ, $RES) => { ... })
+          - pattern: $APP.$METHOD($PATH, ($REQ, $RES, $NEXT) => { ... })
+          - pattern: $APP.$METHOD($PATH, async ($REQ, $RES) => { ... })
+          - pattern: $APP.$METHOD($PATH, function $F($REQ, $RES) { ... })
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(get|post|put|patch|delete)$
+      - metavariable-pattern:
+          metavariable: $PATH
+          patterns:
+            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg)
+
+  - id: access-auth-disabled-flag
+    languages: [python, javascript, typescript]
+    severity: ERROR
+    message: >-
+      An authentication kill-switch is hardcoded ON. Even when intended for local
+      development, a committed auth-off flag is one deploy away from exposing PHI.
+    metadata:
+      clearmap_category: AUTH
+      clearmap_severity: high
+      clearmap_title: Authentication disabled by hardcoded flag
+      hipaa_ref: 164.312(d)
+      remediation: Remove the flag or gate it on a non-production environment check sourced at runtime.
+    patterns:
+      - pattern-regex: >-
+          (?i)\b(auth\w*[_-]?(disabled|skip|bypass|off)|(disable|skip|bypass)[_-]?auth\w*)\s*[:=]\s*(True|true|1\b|"true"|'true')
+      - pattern-not-regex: (?i)os\.environ|process\.env|getenv\(
+
+  - id: access-jwt-no-expiry-py
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A JWT is signed from a payload with no "exp" claim, so a leaked token is
+      valid forever and logout cannot revoke it. 164.312(a)(2)(iii) requires
+      automatic session termination.
+    metadata:
+      clearmap_category: ACCESS
+      clearmap_severity: medium
+      clearmap_title: JWT issued without expiry (no automatic logoff)
+      hipaa_ref: 164.312(a)(2)(iii)
+      remediation: Add a short exp (+iat) claim and server-side revocation; invalidate on logout.
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $P = { ... }
+              ...
+              jwt.encode($P, ...)
+          - pattern: 'jwt.encode({ ... }, ...)'
+      - pattern-not-inside: |
+          $P = { ..., "exp": $E, ... }
+          ...
+      - pattern-not: 'jwt.encode({ ..., "exp": $E, ... }, ...)'
+
+  - id: access-jwt-no-expiry-js
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      jwt.sign() is called without an options object (no expiresIn), so the token
+      never expires and logout cannot revoke it.
+    metadata:
+      clearmap_category: ACCESS
+      clearmap_severity: medium
+      clearmap_title: JWT issued without expiry (no automatic logoff)
+      hipaa_ref: 164.312(a)(2)(iii)
+      remediation: Pass { expiresIn } (and rotate signing keys); add server-side revocation.
+    patterns:
+      - pattern: $JWT.sign($PAYLOAD, $SECRET)
+      - metavariable-regex:
+          metavariable: $JWT
+          regex: ^(jwt|jsonwebtoken)$

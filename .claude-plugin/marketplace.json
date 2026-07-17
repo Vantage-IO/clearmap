@@ -1,0 +1,26 @@
+{
+  "name": "vantage-io",
+  "owner": {
+    "name": "Vantage IO",
+    "url": "https://vantageio.com"
+  },
+  "metadata": {
+    "description": "Vantage IO open-source developer tools.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "clearmap",
+      "source": "./",
+      "description": "HIPAA-aware healthcare development and technical-risk auditing inside your coding agent.",
+      "version": "0.3.0",
+      "author": {
+        "name": "Vantage IO",
+        "url": "https://vantageio.com"
+      },
+      "homepage": "https://github.com/vantage-io/clearmap",
+      "license": "Apache-2.0",
+      "keywords": ["hipaa", "healthcare", "security", "clinical-ai"]
+    }
+  ]
+}

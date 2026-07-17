@@ -1,0 +1,57 @@
+# SESSION — Frontend / Session Exposure (extension; relates 164.312(a)(2)(iv)).
+# PHI persisted to browser storage or handed to third-party client SDKs.
+rules:
+  - id: session-phi-in-web-storage
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      PHI written to localStorage/sessionStorage survives logout and is readable by
+      any script on the origin. Keep PHI server-side; hold transient state in memory.
+    metadata:
+      clearmap_category: SESSION
+      clearmap_severity: high
+      clearmap_title: PHI persisted to web storage
+      hipaa_ref: 164.312(a)(2)(iv)
+      remediation: Do not persist PHI in localStorage/sessionStorage; use in-memory state cleared on logout.
+    patterns:
+      - pattern-either:
+          - pattern: localStorage.setItem($K, ...)
+          - pattern: sessionStorage.setItem($K, ...)
+      - metavariable-pattern:
+          metavariable: $K
+          patterns:
+            - pattern-regex: (?i)(patient|mrn|diagnosis|phi|chart|dob|ssn)
+
+  - id: session-phi-in-cookie
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      PHI written into a JS-readable cookie is exposed to scripts and sent on every
+      request. Avoid storing PHI client-side; use HttpOnly+Secure non-PHI cookies.
+    metadata:
+      clearmap_category: SESSION
+      clearmap_severity: medium
+      clearmap_title: PHI written to a JS-readable cookie
+      hipaa_ref: 164.312(a)(2)(iv)
+      remediation: Do not store PHI in cookies; use server-set HttpOnly+Secure cookies without PHI.
+    patterns:
+      - pattern-regex: '(?i)document\.cookie\s*=\s*`[^`]*(mrn|patient|diagnosis|dob|ssn)'
+
+  - id: session-patient-to-thirdparty-sdk
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      Patient data passed to a third-party SDK (e.g. analytics.identify) ships PHI to
+      a vendor with no clinical purpose / no BAA. Identify by opaque non-PHI id only.
+    metadata:
+      clearmap_category: SESSION
+      clearmap_severity: critical
+      clearmap_title: Patient state passed to a third-party SDK
+      hipaa_ref: 164.312(a)(2)(iv)
+      remediation: Never pass PHI to client SDKs; use an opaque id and non-PHI traits only.
+    patterns:
+      - pattern: $SDK.identify($ID, $OBJ)
+      - metavariable-pattern:
+          metavariable: $OBJ
+          patterns:
+            - pattern-regex: (?i)\b(name|mrn|diagnosis|dob|ssn)\b

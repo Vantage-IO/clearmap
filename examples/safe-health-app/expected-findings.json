@@ -1,0 +1,145 @@
+{
+  "fixture": "safe-health-app",
+  "description": "Clean counterpart of vulnerable-health-app. MUST-NOT-FLAG set: every feature implemented correctly. near_misses are clean patterns that over-broad rules might wrongly flag \u2014 they define the false-positive budget.",
+  "taxonomy_version": "0.2",
+  "regulatory_baseline": {
+    "version": "2026.1",
+    "as_of": "2026-06-01"
+  },
+  "must_catch": [],
+  "near_misses": [
+    {
+      "relates_to": "ACCESS-01",
+      "file": "backend/config.py",
+      "line": 10,
+      "structural_snippet": "DATABASE_URL = os.environ[\"DATABASE_URL\"]",
+      "why_clean": "Looks like a credential assignment but loads from the environment, not a literal."
+    },
+    {
+      "relates_to": "SECRETS-03",
+      "file": "backend/config.py",
+      "line": 13,
+      "structural_snippet": "SECRET_KEY = os.environ[\"SECRET_KEY\"]",
+      "why_clean": "Secret-shaped name but sourced from the environment / secret manager."
+    },
+    {
+      "relates_to": "TRANSIT-01",
+      "file": "backend/config.py",
+      "line": 22,
+      "structural_snippet": "HEALTHCHECK_URL = \"http://localhost:8080/healthz\"",
+      "why_clean": "Plain http:// but a localhost readiness probe carrying no PHI."
+    },
+    {
+      "relates_to": "SESSION-01",
+      "file": "frontend/src/storage.ts",
+      "line": 18,
+      "structural_snippet": "localStorage.setItem(\"ui.theme\", theme);",
+      "why_clean": "localStorage used only for a non-PHI UI preference."
+    },
+    {
+      "relates_to": "SESSION-02",
+      "file": "frontend/src/storage.ts",
+      "line": 24,
+      "structural_snippet": "sessionStorage.setItem(\"csrf\", patientToken);",
+      "why_clean": "sessionStorage holds an opaque CSRF token; the param name 'patientToken' is a decoy."
+    },
+    {
+      "relates_to": "SESSION-03",
+      "file": "frontend/src/storage.ts",
+      "line": 29,
+      "structural_snippet": "document.cookie = `sessionRef=${ref}; Secure; SameSite=Strict; path=/`;",
+      "why_clean": "Cookie holds an opaque, Secure session ref \u2014 no PHI."
+    },
+    {
+      "relates_to": "SESSION-04",
+      "file": "frontend/src/analytics.ts",
+      "line": 13,
+      "structural_snippet": "analytics.identify(patient.id, { plan: \"clinic-pro\" });",
+      "why_clean": "identify() passes only an opaque id + non-PHI plan tier."
+    },
+    {
+      "relates_to": "TRACKING-02",
+      "file": "frontend/src/analytics.ts",
+      "line": 19,
+      "structural_snippet": "analytics.track(\"chart_opened\", { surface: \"web\" });",
+      "why_clean": "Analytics event carries only a non-PHI interaction signal."
+    },
+    {
+      "relates_to": "TRANSIT-01",
+      "file": "frontend/src/PatientView.tsx",
+      "line": 22,
+      "structural_snippet": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" width=\"16\">",
+      "why_clean": "SVG xmlns is a constant XML namespace identifier, not a network endpoint."
+    },
+    {
+      "relates_to": "SECRETS-01",
+      "file": "backend/config.py",
+      "line": 26,
+      "structural_snippet": "SMTP_PASSWORD = \"${SMTP_PASSWORD}\"",
+      "why_clean": "Templated placeholder substituted at deploy time \u2014 not a real credential."
+    },
+    {
+      "relates_to": "SECRETS-02",
+      "file": "frontend/src/observability.ts",
+      "line": 12,
+      "structural_snippet": "clientToken: \"puba1b2c3d4e5f60718293a4b5c6d7e8f\",",
+      "why_clean": "Datadog RUM client token is publishable by design (ships in the browser bundle)."
+    },
+    {
+      "relates_to": "SECRETS-02",
+      "file": "frontend/src/observability.ts",
+      "line": 20,
+      "structural_snippet": "\"https://static.widget-cdn.example/snippet.js?key=11111111-2222-4333-8444-555555555555\";",
+      "why_clean": "Support-widget embed URL with a public key= UUID served to every visitor."
+    },
+    {
+      "relates_to": "SECRETS-03",
+      "file": "frontend/src/observability.ts",
+      "line": 25,
+      "structural_snippet": "{ value: \"option_a\", labelKey: \"q1_option_a\" },",
+      "why_clean": "i18n label key \u2014 a translation-catalog path, not secret material."
+    },
+    {
+      "relates_to": "APPSEC-01",
+      "file": "backend/appsec.py",
+      "line": 17,
+      "structural_snippet": "cur.execute(\"SELECT * FROM patients WHERE name = ?\", (name,))",
+      "why_clean": "Parameterized query; the value is bound, not interpolated."
+    },
+    {
+      "relates_to": "APPSEC-02",
+      "file": "backend/appsec.py",
+      "line": 23,
+      "structural_snippet": "subprocess.run([\"tar\", \"czf\", f\"/backups/{patient_id}.tgz\", f\"/data/{patient_id}\"],",
+      "why_clean": "Argument list with shell=False; no shell to inject into."
+    },
+    {
+      "relates_to": "APPSEC-03",
+      "file": "backend/appsec.py",
+      "line": 31,
+      "structural_snippet": "return requests.get(url)",
+      "why_clean": "URL host is validated against an allowlist before the fetch."
+    },
+    {
+      "relates_to": "APPSEC-04",
+      "file": "backend/appsec.py",
+      "line": 38,
+      "structural_snippet": "with open(os.path.join(DOCS_ROOT, name)) as fh:",
+      "why_clean": "basename strips traversal before the path is joined."
+    },
+    {
+      "relates_to": "APPSEC-05",
+      "file": "backend/appsec.py",
+      "line": 44,
+      "structural_snippet": "return json.loads(blob)",
+      "why_clean": "json, not pickle; no code execution on load."
+    },
+    {
+      "relates_to": "APPSEC-06",
+      "file": "backend/appsec.py",
+      "line": 49,
+      "structural_snippet": "app.add_middleware(CORSMiddleware, allow_origins=[\"https://portal.example.org\"],",
+      "why_clean": "Explicit trusted origin, not a wildcard."
+    }
+  ]
+}

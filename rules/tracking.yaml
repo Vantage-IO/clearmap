@@ -1,0 +1,53 @@
+# TRACKING — Tracking / Analytics (extension; HHS OCR online-tracking guidance).
+# Third-party tracking on PHI surfaces, health fields in events, health in URLs.
+rules:
+  - id: tracking-health-field-event
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      A health field (e.g. diagnosis) is sent as an analytics event property, so the
+      tracking pipeline now carries the patient's condition. Strip health fields.
+    metadata:
+      clearmap_category: TRACKING
+      clearmap_severity: high
+      clearmap_title: Health field sent as analytics event property
+      hipaa_ref: OCR online-tracking guidance
+      remediation: Track only non-PHI interaction signals; never include health fields.
+    patterns:
+      - pattern: $A.track($EVENT, $OBJ)
+      - metavariable-pattern:
+          metavariable: $OBJ
+          patterns:
+            - pattern-regex: (?i)\b(diagnosis|mrn|condition|medication|icd)\b
+
+  - id: tracking-analytics-on-patient-surface
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      Third-party analytics fires from a screen rendering PHI (a patient chart), tying
+      vendor tracking to a specific patient. Disable third-party analytics on PHI screens.
+    metadata:
+      clearmap_category: TRACKING
+      clearmap_severity: high
+      clearmap_title: Analytics firing inside an authenticated patient view
+      hipaa_ref: OCR online-tracking guidance
+      remediation: Disable third-party analytics on PHI screens or use a self-hosted, BAA-covered path.
+    patterns:
+      - pattern-either:
+          - pattern: "analytics.page($NAME, { ..., patientId: $P, ... })"
+          - pattern: 'analytics.page("PatientChart", ...)'
+
+  - id: tracking-health-context-in-url
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      Health context placed in a URL query string leaks into history, server logs, and
+      Referer headers. Reference records by opaque id; never put health context in URLs.
+    metadata:
+      clearmap_category: TRACKING
+      clearmap_severity: medium
+      clearmap_title: Health context in URL query parameter
+      hipaa_ref: OCR online-tracking guidance
+      remediation: Reference records by opaque id; keep health context out of URLs.
+    patterns:
+      - pattern-regex: (?i)[?&](condition|diagnosis|mrn|icd)=
