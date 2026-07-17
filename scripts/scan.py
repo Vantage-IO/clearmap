@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import subprocess
@@ -102,6 +103,22 @@ def _engine_status(name: str, status: str, version: str | None = None, *,
     if reason:
         st["reason"] = reason
     return st
+
+
+def _scan_block(target: Path, findings: list[dict]) -> dict:
+    """Byte-stable fingerprint that binds a reasoning pass to THIS scan and
+    revision. commit = the target's git HEAD (or 'no-git'); fingerprint = a hash
+    of the commit plus the sorted findings, so a reasoning.json can prove it was
+    produced for the current code, not a stale run."""
+    try:
+        commit = subprocess.run(
+            ["git", "-C", str(target), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, check=False, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        commit = ""
+    commit = commit or "no-git"
+    payload = commit + json.dumps(findings, sort_keys=True)
+    return {"commit": commit, "fingerprint": hashlib.sha256(payload.encode()).hexdigest()[:16]}
 
 
 def _changed_files(target: Path) -> list[str]:
@@ -468,6 +485,7 @@ def main() -> int:
         "schema_version": "0.2",
         "source_layer": "deterministic",
         "scan_ok": scan_ok,
+        "scan": _scan_block(target, findings),
         "engines": {k: (v.get("version") or "not-installed") for k, v in engine_status.items()},
         "engine_status": engine_status,
         "regulatory_baseline": {

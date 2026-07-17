@@ -64,18 +64,20 @@ def _candidates(target: Path) -> list[Path]:
 
 
 def _batches(files: list[Path], target: Path, budget: int = 40_000):
-    batch: list[str] = []
+    """Yield batches, each a list of (repo_rel_path, prompt_block) tuples."""
+    batch: list[tuple[str, str]] = []
     size = 0
     for p in files:
         try:
             text = p.read_text(errors="ignore")
         except OSError:
             continue
-        block = f"\n### FILE: {scanmod._rel(str(p), target)}\n{text}\n"
+        rel = scanmod._rel(str(p), target)
+        block = f"\n### FILE: {rel}\n{text}\n"
         if size + len(block) > budget and batch:
             yield batch
             batch, size = [], 0
-        batch.append(block)
+        batch.append((rel, block))
         size += len(block)
     if batch:
         yield batch
@@ -86,6 +88,8 @@ def main() -> int:
     ap.add_argument("target", type=Path)
     ap.add_argument("--out", type=Path, default=Path("reasoning.json"))
     ap.add_argument("--max-batches", type=int, default=8)
+    ap.add_argument("--deterministic", type=Path, default=None,
+                    help="the scan's findings-deterministic.json; binds the manifest to it")
     args = ap.parse_args()
     target = args.target.resolve()
 
@@ -102,19 +106,29 @@ def main() -> int:
 
     refs = _refs_dir()
     checklists = "\n\n".join((refs / c).read_text() for c in CHECKLISTS)
-    reasoning_ids = ", ".join(sorted(k for k, v in taxonomy.findings().items()
-                                     if v["layer"] == "reasoning"))
-    files = _candidates(target)
+    reasoning_ids = sorted(k for k, v in taxonomy.findings().items() if v["layer"] == "reasoning")
+    ids_str = ", ".join(reasoning_ids)
+
+    # Bind the manifest to the scan it reviews, so a reasoning.json for a
+    # different revision cannot be accepted downstream as complete.
+    scan_fp = None
+    if args.deterministic and args.deterministic.is_file():
+        try:
+            scan_fp = (json.loads(args.deterministic.read_text()).get("scan") or {}).get("fingerprint")
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    all_batches = list(_batches(_candidates(target), target))
+    process = all_batches[:args.max_batches]
+    skipped = [rel for b in all_batches[args.max_batches:] for rel, _ in b]
+    files_considered = sum(len(b) for b in process)
 
     findings: list[dict] = []
-    evaluated: set[str] = set()
-    considered = done = failed = 0
-    for i, batch in enumerate(_batches(files, target)):
-        if i >= args.max_batches:
-            break
-        considered += len(batch)
-        user = (f"Canonical reasoning finding ids you may use: {reasoning_ids}.\n\n"
-                f"CHECKLISTS:\n{checklists}\n\nCODE UNDER REVIEW:\n{''.join(batch)}\n\n"
+    done = failed = 0
+    for i, batch in enumerate(process):
+        code = "".join(block for _, block in batch)
+        user = (f"Canonical reasoning finding ids you may use: {ids_str}.\n\n"
+                f"CHECKLISTS:\n{checklists}\n\nCODE UNDER REVIEW:\n{code}\n\n"
                 'Return ONLY {"findings": [ ... ]}. Each finding requires: id (from the '
                 "list above), category, title (short human sentence), severity "
                 "(critical/high/medium/low), source (\"reasoning\"), confidence "
@@ -128,20 +142,28 @@ def main() -> int:
             obj = providers.extract_json(resp["content"])
             for f in (obj.get("findings", []) if isinstance(obj, dict) else []):
                 findings.append(f)
-                if f.get("id"):
-                    evaluated.add(f["id"])
             done += 1
         except providers.ProviderError as e:
             print(f"clearmap: reasoning batch {i} failed: {e}", file=sys.stderr)
             failed += 1
 
-    manifest = {"checks_evaluated": sorted(evaluated), "files_considered": considered,
-                "files_skipped": [], "batches_completed": done, "batches_failed": failed,
-                "privacy_mode": cfg["privacy_mode"]}
+    truncated = bool(skipped)
+    manifest = {
+        "checks_in_scope": reasoning_ids,
+        "files_considered": files_considered,
+        "files_skipped": skipped,
+        "batches_completed": done,
+        "batches_failed": failed,
+        "truncated": truncated,
+        "privacy_mode": cfg["privacy_mode"],
+        "scan_fingerprint": scan_fp,
+    }
     out = {"provider": "openai-compatible", "model": cfg.get("model"),
            "manifest": manifest, "findings": findings}
     args.out.write_text(json.dumps(out, indent=2) + "\n")
-    print(f"clearmap: {len(findings)} reasoning finding(s) in {done} batch(es) -> {args.out}")
+    note = " (TRUNCATED: raise --max-batches for a full review)" if truncated else ""
+    print(f"clearmap: {len(findings)} reasoning finding(s) in {done} batch(es){note} "
+          f"-> {args.out}")
     return 0 if failed == 0 else 1
 
 

@@ -80,12 +80,16 @@ def main() -> int:
             shutil.copytree(ROOT / d, engine / d, ignore=_IGNORE)
         launcher = ROOT / "bin" / "clearmap"
         if launcher.is_file():
-            shutil.copy2(launcher, engine / "clearmap")
+            # Preserve the bin/ subdirectory so the launcher's "root is my
+            # parent's parent" logic resolves to clearmap-engine, not above it.
+            (engine / "bin").mkdir(exist_ok=True)
+            shutil.copy2(launcher, engine / "bin" / "clearmap")
 
     print(f"\nClearMap skills installed under {base}")
-    print("The audit skill runs the bundled engine at "
-          f"{engine / 'scripts'}/. If your agent needs it, set "
-          f"CLEARMAP_PLUGIN_ROOT={engine} so scripts resolve their rules and references.")
+    print("The audit skill finds the bundled engine at ./clearmap-engine next to "
+          "the skills; no environment variable is required. To use it directly: "
+          f"{engine / 'bin' / 'clearmap'} audit <path>  (or "
+          f"python3 {engine / 'scripts'}/audit.py <path>).")
     if args.agent == "codex":
         print("For Codex, invoke the skills explicitly with $clearmap-development "
               "and $clearmap-audit.")

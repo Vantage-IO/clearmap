@@ -114,6 +114,53 @@ class MergeCase(unittest.TestCase):
         self.assertEqual(data["source_layer"], "deterministic")
         self.assertFalse(data["reasoning"]["complete"])
 
+    def test_truncated_stays_incomplete(self):
+        rc, data, err = self.merge(
+            {"findings": [], "manifest": {"batches_failed": 0, "truncated": True,
+                                          "files_skipped": ["big.py"]}})
+        self.assertEqual(rc, 0)
+        self.assertEqual(data["source_layer"], "deterministic")
+        self.assertFalse(data["reasoning"]["complete"])
+        self.assertIn("truncated", data["reasoning"]["incomplete_reason"])
+
+    def test_skipped_files_stay_incomplete(self):
+        rc, data, _ = self.merge(
+            {"findings": [], "manifest": {"batches_failed": 0, "files_skipped": ["b.py"]}})
+        self.assertEqual(rc, 0)
+        self.assertFalse(data["reasoning"]["complete"])
+
+    def test_fingerprint_match_marks_complete(self):
+        det = {"findings": [], "source_layer": "deterministic",
+               "scan": {"commit": "abc123", "fingerprint": "feedface12345678"}}
+        rc, data, _ = self.merge(
+            {"findings": [], "manifest": {"scan_fingerprint": "feedface12345678",
+                                          "batches_failed": 0, "truncated": False,
+                                          "files_skipped": []}}, det=det)
+        self.assertEqual(rc, 0)
+        self.assertTrue(data["reasoning"]["complete"])
+
+    def test_fingerprint_mismatch_stays_incomplete(self):
+        det = {"findings": [], "source_layer": "deterministic",
+               "scan": {"commit": "abc123", "fingerprint": "feedface12345678"}}
+        rc, data, _ = self.merge(
+            {"findings": [], "manifest": {"scan_fingerprint": "0000000000000000",
+                                          "batches_failed": 0, "truncated": False,
+                                          "files_skipped": []}}, det=det)
+        self.assertEqual(rc, 0)
+        self.assertEqual(data["source_layer"], "deterministic")
+        self.assertFalse(data["reasoning"]["complete"])
+        self.assertIn("scan revision", data["reasoning"]["incomplete_reason"])
+
+    def test_missing_fingerprint_when_scan_has_one_stays_incomplete(self):
+        # A manifest that omits the fingerprint cannot be bound to this scan.
+        det = {"findings": [], "source_layer": "deterministic",
+               "scan": {"commit": "abc123", "fingerprint": "feedface12345678"}}
+        rc, data, _ = self.merge(
+            {"findings": [], "manifest": {"batches_failed": 0, "truncated": False,
+                                          "files_skipped": []}}, det=det)
+        self.assertEqual(rc, 0)
+        self.assertFalse(data["reasoning"]["complete"])
+
     def test_provider_provenance_recorded(self):
         rc, data, _ = self.merge(
             {"provider": "openai-compatible", "model": "qwen2.5-coder",

@@ -26,8 +26,19 @@ class TestInstaller(unittest.TestCase):
             self.assertTrue((engine / "scripts" / "scan.py").is_file())
             self.assertTrue((engine / "rules").is_dir())
             self.assertTrue((engine / "references" / "taxonomy.json").is_file())
+            # launcher keeps its bin/ subdir so its root resolution is correct
+            self.assertTrue((engine / "bin" / "clearmap").is_file())
             # no dev-clone junk copied
             self.assertFalse((engine / "scripts" / "__pycache__").exists())
+
+    def test_bundled_launcher_resolves_engine_root(self):
+        with tempfile.TemporaryDirectory() as td:
+            proj = Path(td)
+            self.assertEqual(self._run(proj).returncode, 0)
+            launcher = proj / ".agents" / "skills" / "clearmap-engine" / "bin" / "clearmap"
+            proc = subprocess.run([str(launcher), "--version"], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("clearmap", proc.stdout.lower())
 
     def test_no_overwrite_without_force(self):
         with tempfile.TemporaryDirectory() as td:

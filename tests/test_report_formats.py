@@ -46,6 +46,28 @@ class TestReportFormats(unittest.TestCase):
     def test_json_passes_banned_phrase_guard(self):
         self.assertIsNone(report.check_banned(report.render_json(self.model())))
 
+    def _egress(self, reasoning=None, source_layer="deterministic+reasoning"):
+        data = {"findings": [det()], "source_layer": source_layer, "scan_ok": True}
+        if reasoning is not None:
+            data["reasoning"] = reasoning
+        m = report.build_model(data, "repo", "2026-01-01")
+        return next(s for s in m["scope"] if "locally" in s or "reviewed" in s.lower())
+
+    def test_egress_is_provider_honest(self):
+        # deterministic-only and local-model: nothing left the machine
+        self.assertIn("no source code or PHI left",
+                      self._egress(source_layer="deterministic"))
+        self.assertIn("no source code or PHI left", self._egress(
+            {"provider": "openai-compatible", "manifest": {"privacy_mode": "local-only"}}))
+        # host-agent and remote model: must NOT claim nothing left
+        host = self._egress({"provider": "host-agent"})
+        self.assertNotIn("no source code or PHI left", host)
+        self.assertIn("agent's model provider", host)
+        remote = self._egress({"provider": "openai-compatible", "model": "gpt-x",
+                               "manifest": {"privacy_mode": "provider-managed"}})
+        self.assertNotIn("no source code or PHI left", remote)
+        self.assertIn("sent the reviewed files", remote)
+
     def test_unavailable_json_has_null_score(self):
         m = report.build_model(
             {"findings": [det()], "source_layer": "deterministic", "scan_ok": False,

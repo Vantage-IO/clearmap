@@ -418,7 +418,34 @@ def build_model(data: dict, repo: str, date: str,
             f"**Suppressed:** {suppressed} finding{'s' if suppressed != 1 else ''} filtered "
             "as known false-positive classes (vendored paths, publishable tokens, i18n keys, "
             "templated placeholders) or by explicit allow rules.")
-    scope.append("All analysis ran locally. No source code or PHI left the machine.")
+    # Data-egress statement, honest about where the AI-assisted review ran.
+    # The deterministic scan is always local; the reasoning review may reach a
+    # provider (the host agent, or a local/remote model), so never claim "nothing
+    # left the machine" unless it is actually true.
+    _rz = data.get("reasoning") or {}
+    _rprov = _rz.get("provider")
+    _rmodel = _rz.get("model")
+    _rprivacy = (_rz.get("manifest") or {}).get("privacy_mode")
+    _reasoned = scores.get("reasoning_ran") or bool(_rprov) or n_rea > 0
+    if not _reasoned:
+        scope.append("The automated scan ran locally; no source code or PHI left this machine.")
+    elif _rprov == "openai-compatible" and _rprivacy == "local-only":
+        scope.append("All analysis ran locally, including the AI-assisted review on a local "
+                     "model; no source code or PHI left this machine.")
+    elif _rprov == "openai-compatible":
+        scope.append("The automated scan ran locally. The AI-assisted review sent the "
+                     "reviewed files to the configured model provider"
+                     + (f" ({_rmodel})" if _rmodel else "") + ".")
+    elif _rprov == "host-agent":
+        scope.append("The automated scan ran locally. The AI-assisted review was performed by "
+                     "your coding agent, so the reviewed code was processed by that agent's "
+                     "model provider.")
+    elif _rprov == "manual":
+        scope.append("The automated scan ran locally. The AI-assisted review findings were "
+                     "supplied externally and merged in.")
+    else:
+        scope.append("The automated scan ran locally. An AI-assisted review was included; the "
+                     "reviewed code was processed by whichever agent or model provider ran it.")
     if baseline_caveat:
         scope.append(baseline_caveat)
 

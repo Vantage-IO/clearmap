@@ -10,13 +10,15 @@
     "run_id": {"type": ["string", "null"]},
     "manifest": {
       "type": "object",
-      "description": "Completion manifest. source_layer only becomes deterministic+reasoning when a manifest reports no failed batches.",
+      "description": "Completion manifest. The assessment is marked Complete only when it reports no failed batches, no truncation, no skipped files, and a scan_fingerprint matching the deterministic scan.",
       "properties": {
-        "checks_evaluated": {"type": "array", "items": {"type": "string"}},
+        "scan_fingerprint": {"type": ["string", "null"], "description": "Copy of findings-deterministic.json scan.fingerprint; binds this review to that scan/revision"},
+        "checks_in_scope": {"type": "array", "items": {"type": "string"}, "description": "Reasoning check ids reviewed against"},
         "files_considered": {"type": "integer", "minimum": 0},
-        "files_skipped": {"type": "array"},
+        "files_skipped": {"type": "array", "description": "Applicable files NOT reviewed; must be empty for Complete"},
         "batches_completed": {"type": "integer", "minimum": 0},
         "batches_failed": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean", "description": "True if the review did not cover the whole codebase"},
         "privacy_mode": {"type": "string"}
       }
     },

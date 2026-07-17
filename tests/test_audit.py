@@ -12,6 +12,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 AUDIT = REPO / "scripts" / "audit.py"
+SCAN = REPO / "scripts" / "scan.py"
 SAFE = REPO / "examples" / "safe-health-app"
 
 
@@ -52,15 +53,43 @@ class TestAudit(unittest.TestCase):
         target = Path(tmp.name) / "app"
         shutil.copytree(SAFE, target)
         (target / ".clearmap").mkdir()
-        (target / ".clearmap" / "reasoning.json").write_text(json.dumps(
-            {"provider": "manual", "manifest": {"batches_completed": 1, "batches_failed": 0},
-             "findings": []}))
         env = dict(os.environ, XDG_CONFIG_HOME=str(Path(tmp.name) / "cfg"))
+        # Scan first to learn this scan's fingerprint; a manual manifest is only
+        # Complete when it binds to that fingerprint (and audit re-scans to the same).
+        det = target / ".clearmap" / "findings-deterministic.json"
+        subprocess.run([sys.executable, str(SCAN), str(target), "--out", str(det)],
+                       capture_output=True, text=True, env=env, check=True)
+        fp = json.loads(det.read_text())["scan"]["fingerprint"]
+        (target / ".clearmap" / "reasoning.json").write_text(json.dumps(
+            {"provider": "manual",
+             "manifest": {"scan_fingerprint": fp, "batches_completed": 1, "batches_failed": 0,
+                          "truncated": False, "files_skipped": []},
+             "findings": []}))
         proc = subprocess.run(
             [sys.executable, str(AUDIT), str(target), "--provider", "manual", "--format", "md"],
             capture_output=True, text=True, env=env)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("Assessment: Complete", proc.stdout)
+
+    def test_manual_with_stale_reasoning_is_incomplete(self):
+        """A reasoning.json bound to a DIFFERENT scan is ignored, not trusted."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        target = Path(tmp.name) / "app"
+        shutil.copytree(SAFE, target)
+        (target / ".clearmap").mkdir()
+        env = dict(os.environ, XDG_CONFIG_HOME=str(Path(tmp.name) / "cfg"))
+        (target / ".clearmap" / "reasoning.json").write_text(json.dumps(
+            {"provider": "manual",
+             "manifest": {"scan_fingerprint": "deadbeefdeadbeef", "batches_failed": 0,
+                          "truncated": False, "files_skipped": []},
+             "findings": []}))
+        proc = subprocess.run(
+            [sys.executable, str(AUDIT), str(target), "--provider", "manual", "--format", "md",
+             "--require-complete"],
+            capture_output=True, text=True, env=env)
+        self.assertEqual(proc.returncode, 3)
+        self.assertIn("different scan revision", proc.stderr)
 
 
 if __name__ == "__main__":

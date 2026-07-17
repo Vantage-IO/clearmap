@@ -38,7 +38,7 @@
 
 **Suppressed:** 3 findings filtered as known false-positive classes (vendored paths, publishable tokens, i18n keys, templated placeholders) or by explicit allow rules.
 
-All analysis ran locally. No source code or PHI left the machine.
+The automated scan ran locally. An AI-assisted review was included; the reviewed code was processed by whichever agent or model provider ran it.
 
 **Assessment coverage:** automated scan complete; AI-assisted review complete. Regulatory baseline 2026.1. Authority basis cited: hipaa-required, onc-certification-criterion.
 

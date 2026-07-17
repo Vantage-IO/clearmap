@@ -7,7 +7,7 @@ description: Run a ClearMap HIPAA technical-risk audit of a repository and summa
 
 Run the full ClearMap audit and summarize the result directly in the agent. The user should not need how `scan.py`, `merge_reasoning.py`, `scoring.py`, or `report.py` work, and should not have to open the HTML report to understand the basic result.
 
-Resolve the plugin root from `$CLEARMAP_PLUGIN_ROOT`, else `$CLAUDE_PLUGIN_ROOT`, else `$PLUGIN_ROOT` (in Claude Code this is set for you). Call it `ROOT`. Run every script as `python3 "$ROOT/scripts/<name>.py"` (or `"$ROOT/bin/clearmap" <cmd>` when `bin/` is on PATH). Do not assume ClearMap is pip-installed or that the source repo exists elsewhere.
+Resolve the engine root, call it `ROOT`, in this order: `$CLEARMAP_PLUGIN_ROOT`, else `$CLAUDE_PLUGIN_ROOT`, else `$PLUGIN_ROOT` (Claude Code sets one for you); else, for a skills-only install, the `clearmap-engine` directory next to this skill (its sibling: `<this skill dir>/../clearmap-engine`). Run every script as `python3 "$ROOT/scripts/<name>.py"` (or `"$ROOT/bin/clearmap" <cmd>`). The engine's scripts self-resolve their own rules and references from `ROOT`, so no environment variable is required for a skills-only install. Do not assume ClearMap is pip-installed or that the source repo exists elsewhere.
 
 ## Steps
 
@@ -19,17 +19,25 @@ Resolve the plugin root from `$CLEARMAP_PLUGIN_ROOT`, else `$CLAUDE_PLUGIN_ROOT`
    python3 "$ROOT/scripts/scan.py" "$TARGET" --out "$TARGET/.clearmap/findings-deterministic.json"
    ```
    If this exits non-zero (a required engine failed), STOP. Report `Score unavailable`, name the failed engine from `engine_status`, give the exact next action, and do not show a number or zero findings.
-5. **AI-assisted review.** Read `"$ROOT/references/clinical-checks.md"` and `"$ROOT/references/audit-checks.md"`. Read the applicable source under `TARGET` and evaluate each check yourself. Write `"$TARGET/.clearmap/reasoning.json"` following `"$ROOT/references/reasoning-schema.json"`:
+5. **AI-assisted review.** Read `"$ROOT/references/clinical-checks.md"` and `"$ROOT/references/audit-checks.md"`. Read every applicable source file under `TARGET` and evaluate each reasoning check yourself. Write `"$TARGET/.clearmap/reasoning.json"` following `"$ROOT/references/reasoning-schema.json"`. The **manifest is what makes the assessment count as Complete**, so fill it truthfully:
    ```json
    {
      "provider": "host-agent",
      "model": "<the model you are running as, if known>",
-     "manifest": {"checks_evaluated": ["AUDIT-01", "AI-RAG-01"], "files_considered": 0,
-                  "files_skipped": [], "batches_completed": 1, "batches_failed": 0,
-                  "privacy_mode": "local-only"},
+     "manifest": {
+       "scan_fingerprint": "<copy the `scan.fingerprint` value from findings-deterministic.json>",
+       "checks_in_scope": ["AUDIT-01", "AUDIT-02", "AI-RAG-01", "..."],
+       "files_considered": 12,
+       "files_skipped": [],
+       "batches_completed": 1,
+       "batches_failed": 0,
+       "truncated": false,
+       "privacy_mode": "local-only"
+     },
      "findings": [ { ...one reasoning finding... } ]
    }
    ```
+   The result is marked **Complete** only if you reviewed every applicable file (`files_skipped` empty), `truncated` is false, `batches_failed` is 0, and `scan_fingerprint` matches this scan. If you could not review some files, list them in `files_skipped` and set `truncated: true` honestly; the report will then show an automated-layer-only result rather than a false Complete.
    Each finding needs: `id` (a canonical reasoning id from `references/taxonomy.json`, e.g. `AUDIT-01`, `AI-RAG-03`), `category`, `title` (a short human sentence, no rule slugs), `severity`, `source` = `"reasoning"`, `confidence` (high/medium/low), `file` (repo-relative, no `..`), `line` (1-based), `structural_snippet` (structure only, never a raw PHI or secret value), `why`. Optional: `remediation`, `reviewer_question`. Report only what you verified in the code; never invent findings or copy an answer key. If you found nothing, still write the manifest with `"findings": []`.
 6. **Merge + validate.**
    ```bash

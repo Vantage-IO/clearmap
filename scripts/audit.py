@@ -90,17 +90,44 @@ def main() -> int:
 
     findings_path, reasoning_done = det, False
     reasoning_json = out_dir / "reasoning.json"
+
+    def _merge() -> tuple[bool, bool]:
+        """Return (merged_ok, complete)."""
+        rc = _run("merge_reasoning", str(det), str(reasoning_json), "--repo-path",
+                  str(target), "--out", str(out_dir / "findings.json")).returncode
+        if rc != 0:
+            return False, False
+        data = json.loads((out_dir / "findings.json").read_text())
+        return True, bool((data.get("reasoning") or {}).get("complete"))
+
+    def _stale(det_fp) -> bool:
+        # An existing reasoning.json is stale only if it explicitly names a
+        # DIFFERENT scan fingerprint. A missing fingerprint is merged but cannot
+        # be marked complete downstream.
+        try:
+            r_fp = ((json.loads(reasoning_json.read_text()).get("manifest") or {})
+                    .get("scan_fingerprint"))
+        except (OSError, json.JSONDecodeError):
+            return True
+        return bool(r_fp and det_fp and r_fp != det_fp)
+
+    det_fp = (json.loads(det.read_text()).get("scan") or {}).get("fingerprint")
     if args.skip_reasoning:
         pass
     elif provider == "openai-compatible":
-        if _run("reason", str(target), "--out", str(reasoning_json)).returncode == 0:
-            if _run("merge_reasoning", str(det), str(reasoning_json), "--repo-path",
-                    str(target), "--out", str(out_dir / "findings.json")).returncode == 0:
-                findings_path, reasoning_done = out_dir / "findings.json", True
+        if _run("reason", str(target), "--deterministic", str(det),
+                "--out", str(reasoning_json)).returncode == 0:
+            merged, reasoning_done = _merge()
+            if merged:
+                findings_path = out_dir / "findings.json"
     elif reasoning_json.exists():  # host-agent (agent wrote it) or manual
-        if _run("merge_reasoning", str(det), str(reasoning_json), "--repo-path",
-                str(target), "--out", str(out_dir / "findings.json")).returncode == 0:
-            findings_path, reasoning_done = out_dir / "findings.json", True
+        if _stale(det_fp):
+            print("clearmap: existing .clearmap/reasoning.json is for a different scan "
+                  "revision; ignoring it. Re-run the reasoning review.", file=sys.stderr)
+        else:
+            merged, reasoning_done = _merge()
+            if merged:
+                findings_path = out_dir / "findings.json"
     elif provider == "manual":
         print("clearmap: --provider manual needs .clearmap/reasoning.json", file=sys.stderr)
         return 2
@@ -109,11 +136,11 @@ def main() -> int:
          "--format", args.format, "--out", str(out_dir / "clearmap-report.md"))
     _summary(findings_path, target.name, out_dir, provider)
 
-    if not reasoning_done and provider == "host-agent" and not args.skip_reasoning:
-        print("\nAI-assisted review not completed (no .clearmap/reasoning.json). This is an "
-              "automated-layer-only result. To complete it: run inside a coding agent that "
-              "writes reasoning.json, `clearmap setup` an OpenAI-compatible provider, or use "
-              "--provider manual with a supplied reasoning.json.")
+    if not reasoning_done and not args.skip_reasoning:
+        print("\nAI-assisted review not completed; this is an automated-layer-only result, "
+              "not a full audit. To complete it: run the review inside a coding agent, "
+              "`clearmap setup` an OpenAI-compatible provider (raise --max-batches on a large "
+              "repo), or use --provider manual with a reasoning.json matching this scan.")
     if args.require_complete and not reasoning_done:
         return 3
     return 0

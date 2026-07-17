@@ -167,10 +167,24 @@ def main() -> int:
     # it (no failed batches) or, for a legacy manifest-less reasoning.json, if the
     # agent actually produced findings. An empty, manifest-less file leaves
     # source_layer deterministic, so the "Assessment incomplete" banner stays.
-    if manifest:
-        reasoning_complete = int(manifest.get("batches_failed", 0) or 0) == 0
+    # Completion is claimed only when a manifest confirms the whole codebase was
+    # reviewed for this exact scan: no failed batches, no truncation, no skipped
+    # files, and a scan_fingerprint that matches the deterministic scan. Without
+    # a manifest we never claim complete (a bare findings list is not proof).
+    det_fp = (det.get("scan") or {}).get("fingerprint")
+    incomplete_reasons: list[str] = []
+    if not manifest:
+        incomplete_reasons.append("no completion manifest")
     else:
-        reasoning_complete = len(rfindings) > 0
+        if int(manifest.get("batches_failed", 0) or 0) != 0:
+            incomplete_reasons.append("one or more reasoning batches failed")
+        if manifest.get("truncated") or manifest.get("files_skipped"):
+            n = len(manifest.get("files_skipped") or [])
+            incomplete_reasons.append(f"review truncated ({n} file(s) not reviewed)")
+        if det_fp and manifest.get("scan_fingerprint") != det_fp:
+            incomplete_reasons.append("manifest does not match this scan revision")
+    reasoning_complete = not incomplete_reasons
+
     det["reasoning"] = {
         "provider": provider,
         "model": model,
@@ -180,6 +194,10 @@ def main() -> int:
     }
     if reasoning_complete:
         det["source_layer"] = "deterministic+reasoning"
+    else:
+        det["reasoning"]["incomplete_reason"] = "; ".join(incomplete_reasons)
+        print("clearmap: reasoning review NOT marked complete: "
+              + "; ".join(incomplete_reasons), file=sys.stderr)
     args.out.write_text(json.dumps(det, indent=2) + "\n")
 
     by_src: dict[str, int] = {}
