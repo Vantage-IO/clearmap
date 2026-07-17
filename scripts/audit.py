@@ -51,6 +51,8 @@ def _summary(findings_path: Path, repo: str, out_dir: Path, provider: str) -> No
     print(f"\nReports:\n{out_dir / 'clearmap-report.md'}\n{out_dir / 'clearmap-report.html'}")
     print("\nTechnical code-risk signal only. Not a compliance score, certification, "
           "formal HIPAA risk analysis, or legal determination.")
+    print("\nThis is a partial, automated technical review, not a full audit. For a deeper "
+          "reliability assessment beyond the technical layer, visit vantageio.com.")
 
 
 def main() -> int:
@@ -59,7 +61,7 @@ def main() -> int:
     ap.add_argument("--provider", choices=config.PROVIDERS)
     ap.add_argument("--skip-reasoning", action="store_true")
     ap.add_argument("--require-complete", action="store_true")
-    ap.add_argument("--format", choices=["md", "html", "both"], default="both")
+    ap.add_argument("--format", choices=["md", "html", "json", "both", "all"], default="both")
     ap.add_argument("--diff", action="store_true")
     ap.add_argument("--history", action="store_true")
     args = ap.parse_args()

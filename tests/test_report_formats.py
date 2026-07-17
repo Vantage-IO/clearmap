@@ -1,0 +1,60 @@
+"""Report output formats: the machine-readable JSON report and the closing note
+that appears on every generated report and audit summary."""
+import json
+import sys
+import unittest
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "scripts"))
+import report  # noqa: E402
+from report_html import render_html  # noqa: E402
+
+
+def det(cat="TRANSIT", sev="critical", ref="164.312(e)(1)"):
+    return {"category": cat, "severity": sev, "source": "deterministic", "engine": "semgrep",
+            "rule_id": "r", "file": "a.py", "line": 1, "title": "A finding",
+            "hipaa_ref": ref, "structural_snippet": "", "why": "why", "remediation": "fix"}
+
+
+class TestReportFormats(unittest.TestCase):
+    def model(self):
+        return report.build_model(
+            {"findings": [det()], "source_layer": "deterministic+reasoning", "scan_ok": True},
+            "repo", "2026-01-01")
+
+    def test_json_report_is_valid_and_complete(self):
+        doc = json.loads(report.render_json(self.model()))
+        self.assertEqual(doc["score_state"], "complete")
+        self.assertIsInstance(doc["score"], int)
+        self.assertTrue(doc["findings"])
+        self.assertIn("category", doc["findings"][0])
+        self.assertIn("assessment", doc)
+        self.assertIn("counts", doc)
+
+    def test_closing_note_hints_partial_and_links(self):
+        doc = json.loads(report.render_json(self.model()))
+        self.assertIn("partial", doc["closing_note"].lower())
+        self.assertIn("vantageio.com", doc["closing_note"])
+
+    def test_partial_note_in_md_and_html(self):
+        m = self.model()
+        for out in (report.render_md(m), render_html(m)):
+            self.assertIn("vantageio.com", out)
+            self.assertIn("partial", out.lower())
+
+    def test_json_passes_banned_phrase_guard(self):
+        self.assertIsNone(report.check_banned(report.render_json(self.model())))
+
+    def test_unavailable_json_has_null_score(self):
+        m = report.build_model(
+            {"findings": [det()], "source_layer": "deterministic", "scan_ok": False,
+             "engine_status": {"semgrep": {"status": "timeout"}, "gitleaks": {"status": "success"}}},
+            "repo", "2026-01-01")
+        doc = json.loads(report.render_json(m))
+        self.assertIsNone(doc["score"])
+        self.assertEqual(doc["score_state"], "unavailable")
+
+
+if __name__ == "__main__":
+    unittest.main()

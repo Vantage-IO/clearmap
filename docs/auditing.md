@@ -21,10 +21,37 @@ or from the terminal: `clearmap audit .`
 5. **Report.** Markdown and self-contained HTML are written to `.clearmap/`.
 6. **Summary.** The score, assessment state, counts, and top issues print in the agent.
 
-## Output
+## The report
 
-- `.clearmap/clearmap-report.md` and `.clearmap/clearmap-report.html` (gitignored, fixed filenames).
-- Machine-readable: `clearmap export .clearmap/findings.json --format sarif|csv`.
+![Sample ClearMap report](report-sample.png)
+
+The report opens with the ClearMap HIPAA Technical Risk Score and its qualification, a severity breakdown, the top findings, scope and coverage, the full findings with their regulatory citations and authority basis, and a closing note. No raw PHI-like value ever appears in it.
+
+## Generating the report
+
+The audit writes the report automatically, but you can regenerate it in any format from your agent without re-scanning:
+
+```
+/clearmap:report html      # self-contained HTML (open in a browser)
+/clearmap:report md        # Markdown
+/clearmap:report json      # machine-readable JSON of the issues
+/clearmap:report both       # md + html
+/clearmap:report all        # md + html + json
+```
+
+In Codex or another agent, ask in natural language: "Generate the ClearMap report as JSON." From the terminal:
+
+```bash
+clearmap report .clearmap/findings.json --repo-path . --format all
+# writes .clearmap/clearmap-report.{md,html,json}
+```
+
+The `json` output is the machine-readable report (score, assessment, findings, suppressions, and closing note) for dashboards or further processing.
+
+## Output locations
+
+- `.clearmap/clearmap-report.md`, `.clearmap/clearmap-report.html`, `.clearmap/clearmap-report.json` (gitignored, fixed filenames).
+- Machine-readable exports: `clearmap export .clearmap/findings.json --format sarif|csv`.
 
 ## Complete vs automated-layer-only
 

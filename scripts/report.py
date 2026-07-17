@@ -82,10 +82,10 @@ SCORE_QUALIFICATION = ("Technical code-risk signal only. Not a compliance score,
 # No price, no compliance claim.
 CTA_FOOTER = (
     "Prepared with ClearMap, an open-source HIPAA technical-risk scanner by Vantage IO. "
-    "An automated scan is the baseline. A full reliability assessment goes further: "
-    "deeper and broader detection coverage, expert verification of every finding, and "
-    "review of the safeguards no automated tool can see. When your team is ready for "
-    "that step, visit vantageio.com."
+    "This is a partial, automated technical review, not a full audit. A complete "
+    "reliability assessment goes further: deeper and broader detection coverage, expert "
+    "verification of every finding, and review of the safeguards no automated tool can "
+    "see. For that deeper look, visit vantageio.com."
 )
 CTA_URL = "https://vantageio.com"
 
@@ -764,6 +764,38 @@ def render(data: dict, repo: str, date: str) -> str:
     return render_md(build_model(data, repo, date))
 
 
+def render_json(m: dict) -> str:
+    """Structured JSON of the report: score, assessment, findings, suppressions,
+    and the closing note. A machine-readable companion to the markdown/HTML."""
+    s = m["scores"]
+    keys = ("id", "rule_id", "category", "severity", "source", "confidence", "engine",
+            "file", "line", "title", "hipaa_ref", "authority_type", "why", "remediation",
+            "structural_snippet", "reviewer_question")
+    doc = {
+        "clearmap_version": m["version"],
+        "repo": m["repo"],
+        "date": m["date"],
+        "regulatory_baseline": m["baseline"],
+        "score": None if m["score_state"] == "unavailable" else s["score"],
+        "score_state": m["score_state"],
+        "score_label": m["score_label"],
+        "score_reason": m["score_reason"] or None,
+        "posture": s["posture"],
+        "qualification": m["score_qualification"],
+        "counts": {"critical": s["n_critical"], "high": s["n_high"],
+                   "medium": m["n_medium"], "low": m["n_low"]},
+        "assessment": m["assessment"],
+        "not_reviewed_categories": s.get("not_reviewed_categories", []),
+        "findings": [{k: f.get(k) for k in keys} for f in m["findings"]],
+        "suppressions": m["suppressions"],
+        "suppressed_count": m["suppressed_count"],
+        "disclaimer": m["disclaimer"],
+        "closing_note": m["cta"],
+        "closing_url": m["cta_url"],
+    }
+    return _normalize_dashes(json.dumps(doc, indent=2))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="ClearMap report renderer")
     ap.add_argument("findings", type=Path)
@@ -773,8 +805,9 @@ def main() -> int:
                     help="path to the scanned git repo; embeds source provenance "
                          "(branch, commit, last commit, remote) at the top of the report")
     ap.add_argument("--date", default=None)
-    ap.add_argument("--format", choices=["md", "html", "both"], default="md",
-                    help="markdown, self-contained HTML, or both (html path = --out with .html)")
+    ap.add_argument("--format", choices=["md", "html", "json", "both", "all"], default="md",
+                    help="markdown, self-contained HTML, JSON, both (md+html), or all "
+                         "(html/json paths = --out with .html/.json)")
     args = ap.parse_args()
 
     data = json.loads(args.findings.read_text())
@@ -785,13 +818,16 @@ def main() -> int:
     model = build_model(data, repo, date, provenance)
 
     outputs: list[tuple[Path, str]] = []
-    if args.format in ("md", "both"):
+    if args.format in ("md", "both", "all"):
         outputs.append((args.out if args.out.suffix != ".html" else args.out.with_suffix(".md"),
                         render_md(model)))
-    if args.format in ("html", "both"):
+    if args.format in ("html", "both", "all"):
         from report_html import render_html  # lazy: md-only runs never import it
         html_path = args.out if args.out.suffix == ".html" else args.out.with_suffix(".html")
         outputs.append((html_path, render_html(model)))
+    if args.format in ("json", "all"):
+        json_path = args.out if args.out.suffix == ".json" else args.out.with_suffix(".json")
+        outputs.append((json_path, render_json(model)))
 
     for _path, text in outputs:
         bad = check_banned(text)

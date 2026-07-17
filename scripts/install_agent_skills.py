@@ -37,11 +37,13 @@ def main() -> int:
     ap.add_argument("--target", type=Path, default=Path("."))
     ap.add_argument("--scope", choices=("project", "user"), default="project")
     ap.add_argument("--agent", choices=("codex", "generic"), default="generic")
+    ap.add_argument("--dest", type=Path, default=None,
+                    help="explicit skills directory to install into (overrides --scope/--target)")
     ap.add_argument("--uninstall", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
-    base = _base(args.scope, args.target)
+    base = args.dest.expanduser() if args.dest else _base(args.scope, args.target)
     tag = "[dry-run] " if args.dry_run else ""
 
     if args.uninstall:

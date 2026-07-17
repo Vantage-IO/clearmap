@@ -186,5 +186,5 @@ are an engineering target; counsel must confirm them.
 
 ---
 
-*Prepared with ClearMap, an open-source HIPAA technical-risk scanner by Vantage IO. An automated scan is the baseline. A full reliability assessment goes further: deeper and broader detection coverage, expert verification of every finding, and review of the safeguards no automated tool can see. When your team is ready for that step, visit vantageio.com.*
+*Prepared with ClearMap, an open-source HIPAA technical-risk scanner by Vantage IO. This is a partial, automated technical review, not a full audit. A complete reliability assessment goes further: deeper and broader detection coverage, expert verification of every finding, and review of the safeguards no automated tool can see. For that deeper look, visit vantageio.com.*
 

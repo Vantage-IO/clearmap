@@ -1,6 +1,6 @@
 # CLAUDE.md: ClearMap
 
-ClearMap: a local-first HIPAA **technical-risk** scanner/guardrail for healthcare codebases. Three layers: deterministic (Semgrep rules in `rules/` + Gitleaks via `scripts/scan.py`), LLM reasoning (checklists in `references/`), and scoring (`scripts/scoring.py`) producing a markdown/HTML report. It ships as a Claude Code plugin (`.claude-plugin/plugin.json`, `commands/` = `/clearmap:audit|issues|plan`, `skills/` = clearmap + clearmap-companion). Apache 2.0. Core is Python 3.10+ stdlib only: no runtime pip dependencies.
+ClearMap: a local-first HIPAA **technical-risk** scanner/guardrail for healthcare codebases. Three layers: deterministic (Semgrep rules in `rules/` + Gitleaks via `scripts/scan.py`), LLM reasoning (checklists in `references/`), and scoring (`scripts/scoring.py`) producing a markdown/HTML report. It ships as an agent plugin (`.claude-plugin/` + `.codex-plugin/` + `.agents/`, `commands/` = `/clearmap:setup|plan|develop|audit|issues|report`, `skills/` = clearmap-development + clearmap-audit). Apache 2.0. Core is Python 3.10+ stdlib only: no runtime pip dependencies.
 
 **It is a technical risk signal, NOT a compliance certification. Never emit "HIPAA compliant" language in any output (enforced by the banned-phrase guard in `report.check_banned`).**
 
