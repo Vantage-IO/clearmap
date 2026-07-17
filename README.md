@@ -33,6 +33,12 @@ python3 clearmap/scripts/install_agent_skills.py --scope user --agent codex
 
 Then in Codex: "Use $clearmap-audit to audit this repository." Full details and the native-plugin option: [docs/codex.md](docs/codex.md).
 
+## Local-first, and how to make it fully local
+
+The scanner, scoring, and reports always run on your machine with no network calls. The only step that uses a model is the AI-assisted review. By default it runs in your coding agent (Claude Code or Codex), which means the code under review reaches that agent's provider as part of the agent's normal operation.
+
+To keep everything on your machine, run `/clearmap:setup` and point ClearMap at a **local model** (Ollama or LM Studio): the review then never leaves your machine, not even to an agent. You can also choose a **remote model** such as OpenRouter if you prefer. Setup is optional; the default (your agent) needs no configuration. Details: [docs/advanced.md](docs/advanced.md).
+
 ## What it does
 
 **Builds safer healthcare code.** Ask for something ordinary ("Add symptoms and SSN to the patient record") and ClearMap still ships the feature, but questions whether the full SSN is needed, separates identity from clinical data, keeps PHI out of logs and prompts, and adds authentication and audit events.
