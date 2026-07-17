@@ -51,7 +51,7 @@ class TestReportFormats(unittest.TestCase):
         if reasoning is not None:
             data["reasoning"] = reasoning
         m = report.build_model(data, "repo", "2026-01-01")
-        return next(s for s in m["scope"] if "locally" in s or "reviewed" in s.lower())
+        return next(s for s in m["scope"] if "ran locally" in s)
 
     def test_egress_is_provider_honest(self):
         # deterministic-only and local-model: nothing left the machine

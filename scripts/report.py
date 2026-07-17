@@ -403,11 +403,20 @@ def build_model(data: dict, repo: str, date: str,
         + (f" executed by {engine_bits}" if engine_bits else "")
         + ". These findings are reproducible from run to run and appear below as Confirmed.",
     ]
-    if n_rea:
+    # Whether an AI-assisted review actually ran this pass. A completed review that
+    # found nothing still ran; finding counts describe results, never whether the
+    # review happened, so this must not key off n_rea alone.
+    reasoning_meta = data.get("reasoning") or {}
+    reasoning_provider = reasoning_meta.get("provider")
+    reasoning_model = reasoning_meta.get("model")
+    reasoning_privacy = (reasoning_meta.get("manifest") or {}).get("privacy_mode")
+    reasoning_present = (bool(reasoning_provider) or scores.get("reasoning_ran")
+                         or n_rea > 0)
+    if reasoning_present:
         scope.append(
             "**AI-assisted code review:** an AI agent reviewed the code against ClearMap's "
             "clinical and audit checklists, covering risks that pattern matching cannot "
-            "judge. These findings appear below as Needs verification and should be "
+            "judge. Any issues it raised appear below as Needs verification and should be "
             "confirmed by an engineer.")
     else:
         scope.append(
@@ -422,25 +431,20 @@ def build_model(data: dict, repo: str, date: str,
     # The deterministic scan is always local; the reasoning review may reach a
     # provider (the host agent, or a local/remote model), so never claim "nothing
     # left the machine" unless it is actually true.
-    _rz = data.get("reasoning") or {}
-    _rprov = _rz.get("provider")
-    _rmodel = _rz.get("model")
-    _rprivacy = (_rz.get("manifest") or {}).get("privacy_mode")
-    _reasoned = scores.get("reasoning_ran") or bool(_rprov) or n_rea > 0
-    if not _reasoned:
+    if not reasoning_present:
         scope.append("The automated scan ran locally; no source code or PHI left this machine.")
-    elif _rprov == "openai-compatible" and _rprivacy == "local-only":
+    elif reasoning_provider == "openai-compatible" and reasoning_privacy == "local-only":
         scope.append("All analysis ran locally, including the AI-assisted review on a local "
                      "model; no source code or PHI left this machine.")
-    elif _rprov == "openai-compatible":
+    elif reasoning_provider == "openai-compatible":
         scope.append("The automated scan ran locally. The AI-assisted review sent the "
                      "reviewed files to the configured model provider"
-                     + (f" ({_rmodel})" if _rmodel else "") + ".")
-    elif _rprov == "host-agent":
+                     + (f" ({reasoning_model})" if reasoning_model else "") + ".")
+    elif reasoning_provider == "host-agent":
         scope.append("The automated scan ran locally. The AI-assisted review was performed by "
                      "your coding agent, so the reviewed code was processed by that agent's "
                      "model provider.")
-    elif _rprov == "manual":
+    elif reasoning_provider == "manual":
         scope.append("The automated scan ran locally. The AI-assisted review findings were "
                      "supplied externally and merged in.")
     else:
@@ -452,6 +456,17 @@ def build_model(data: dict, repo: str, date: str,
     # Incomplete-assessment banner: reasoning-only categories that apply but
     # were never reviewed (the AI-assisted pass did not run). Prevents a
     # deterministic-only run from reading as a clean low-risk result.
+    # Completion is authoritative from the merge step when reasoning metadata is
+    # present (it accounts for skipped files, failed/truncated batches, and a scan
+    # fingerprint bound to this run). Only a legacy findings file without that
+    # metadata falls back to whether the reasoning layer ran at all. Never infer
+    # completeness from finding counts: a truncated review that happened to find
+    # one issue per category is still incomplete.
+    if "complete" in reasoning_meta:
+        reasoning_complete = bool(reasoning_meta.get("complete"))
+    else:
+        reasoning_complete = bool(scores.get("reasoning_ran"))
+
     not_reviewed = scores.get("not_reviewed_categories", [])
     incomplete = ""
     if not_reviewed:
@@ -461,6 +476,13 @@ def build_model(data: dict, repo: str, date: str,
             "evaluated by the AI-assisted review, which was not run. They are shown below "
             "as Not reviewed and excluded from the score. The result reflects the automated "
             "pattern-analysis layer only. Run the full audit for a complete rating.")
+    elif reasoning_present and not reasoning_complete:
+        detail = reasoning_meta.get("incomplete_reason") or "the review did not finish"
+        incomplete = (
+            f"Assessment incomplete. The AI-assisted review did not finish ({detail}), so any "
+            "issues it raised are shown below but the review is partial. This result reflects "
+            "the automated pattern-analysis layer plus an incomplete AI review. Re-run the "
+            "full audit for a complete rating.")
 
     # Score state: distinguish a complete assessment, an automated-layer-only
     # assessment (reasoning did not run: still a real, qualified number), and an
@@ -484,7 +506,7 @@ def build_model(data: dict, repo: str, date: str,
     elif n_applicable == 0:
         score_state = "unavailable"
         score_reason = "No applicable safeguard categories were detected in this codebase."
-    elif not_reviewed:
+    elif not reasoning_complete:
         score_state = "incomplete"
         score_reason = ""
     else:
@@ -494,13 +516,13 @@ def build_model(data: dict, repo: str, date: str,
     if score_state == "unavailable":
         incomplete = ""  # the unavailable reason supersedes the reasoning-not-run banner
 
-    reasoning_meta = data.get("reasoning") or {}
     assessment = {
         "engines_completed": scan_ok,
         "automated_layer": "complete" if scan_ok else "incomplete",
-        "reasoning_layer": "complete" if scores["reasoning_ran"] else "not run",
-        "reasoning_provider": reasoning_meta.get("provider"),
-        "reasoning_model": reasoning_meta.get("model"),
+        "reasoning_layer": ("complete" if reasoning_complete else
+                            "incomplete" if reasoning_present else "not run"),
+        "reasoning_provider": reasoning_provider,
+        "reasoning_model": reasoning_model,
         "baseline_version": baseline.get("baseline_version"),
         "authority_types": sorted({c["authority_type"] for c in citations
                                    if c.get("authority_type")}),

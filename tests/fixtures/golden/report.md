@@ -34,7 +34,7 @@
 
 **Automated pattern analysis:** curated ClearMap rules executed by Semgrep 1.164.0 and Gitleaks 8.30.1. These findings are reproducible from run to run and appear below as Confirmed.
 
-**AI-assisted code review:** an AI agent reviewed the code against ClearMap's clinical and audit checklists, covering risks that pattern matching cannot judge. These findings appear below as Needs verification and should be confirmed by an engineer.
+**AI-assisted code review:** an AI agent reviewed the code against ClearMap's clinical and audit checklists, covering risks that pattern matching cannot judge. Any issues it raised appear below as Needs verification and should be confirmed by an engineer.
 
 **Suppressed:** 3 findings filtered as known false-positive classes (vendored paths, publishable tokens, i18n keys, templated placeholders) or by explicit allow rules.
 

@@ -29,6 +29,12 @@ def det(cat="TRANSIT", sev="critical", ref="164.312(e)(1)"):
             "hipaa_ref": ref, "structural_snippet": "", "why": "why", "remediation": "fix"}
 
 
+def rea(cat, sev="high", ref="164.312(b)"):
+    return {"category": cat, "severity": sev, "source": "reasoning", "engine": "host-agent",
+            "id": "x", "file": "a.py", "line": 1, "title": "A reasoning finding",
+            "hipaa_ref": ref, "structural_snippet": "", "why": "why", "confidence": "high"}
+
+
 class TestScoreStates(unittest.TestCase):
     def build(self, data):
         return report.build_model(data, "repo", "2026-01-01")
@@ -65,6 +71,39 @@ class TestScoreStates(unittest.TestCase):
                     if "Technical Risk Score:" in ln][0]
         self.assertIn("unavailable", headline)
         self.assertNotRegex(headline, r"\d+/100")
+
+    def test_truncated_review_with_findings_is_incomplete(self):
+        # The regression: a review the merge marked incomplete (truncated) that
+        # happened to find an issue in every reasoning-only category clears
+        # not_reviewed, but completeness must come from reasoning.complete, not
+        # from finding counts. It must NOT read as complete.
+        m = self.build({
+            "findings": [det(), rea("AI-RAG"), rea("AUDIT")],
+            "source_layer": "deterministic",
+            "scan_ok": True,
+            "reasoning": {"provider": "host-agent", "complete": False,
+                          "incomplete_reason": "review truncated (2 file(s) not reviewed)"},
+        })
+        self.assertFalse(m["scores"]["not_reviewed_categories"])  # findings cleared the list
+        self.assertEqual(m["score_state"], "incomplete")
+        self.assertEqual(m["assessment"]["reasoning_layer"], "incomplete")
+        md = report.render_md(m)
+        self.assertIn("(automated layer only)", md)
+        self.assertIn("did not finish", md)
+        self.assertNotIn("Assessment coverage:** automated scan complete; "
+                         "AI-assisted review complete", md)
+
+    def test_complete_review_with_zero_ai_findings_reads_complete(self):
+        # Presentation fix: a completed review that found nothing still ran; the
+        # scope must not say the AI review was "not part of this run".
+        m = self.build({
+            "findings": [det()], "source_layer": "deterministic+reasoning", "scan_ok": True,
+            "reasoning": {"provider": "host-agent", "complete": True},
+        })
+        self.assertEqual(m["score_state"], "complete")
+        self.assertEqual(m["assessment"]["reasoning_layer"], "complete")
+        self.assertNotIn("not part of this run", " ".join(m["scope"]))
+        self.assertTrue(any("an AI agent reviewed the code" in s for s in m["scope"]))
 
     def test_assessment_block(self):
         m = self.build({"findings": [det()], "source_layer": "deterministic+reasoning",
