@@ -106,6 +106,10 @@ Not a HIPAA compliance certification, and a score does not mean a product is or 
 
 Apache 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
+## Roadmap
+
+- **Acknowledge findings covered by compensating controls.** Some findings are technically valid but already mitigated by controls ClearMap cannot see in code, for example PHI sent to an LLM under a signed BAA with zero data retention. A coming release will let you acknowledge such a finding with a documented justification so it stays visible in the report as an accepted, documented risk but no longer deducts from the score or recurs as an unresolved critical.
+
 ---
 
 ClearMap is a partial, automated technical review, not a full HIPAA audit. For a deeper reliability assessment and expert assistance, visit [vantageio.com](https://vantageio.com).
