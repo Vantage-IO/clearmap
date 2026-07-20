@@ -3,7 +3,31 @@
 All notable changes to ClearMap are documented here. The format is based on
 Keep a Changelog, and ClearMap follows semantic versioning.
 
-## [0.3.0] (unreleased)
+## [0.4.0]
+
+### Added
+- **Acknowledgments.** A `clearmap-acknowledgments.json` file at the repo root lets
+  you accept a valid finding as documented risk (for example PHI to an LLM under a
+  signed BAA with zero data retention), with an owner, date, reason, and optional
+  expiry. An acknowledged finding stays visible and is listed in a new
+  Acknowledgments appendix, but does not deduct from the score; expired
+  acknowledgments are scored again. Compliance-claim wording is rejected, and the
+  file is read at report time (`scripts/acknowledgments.py`).
+- **Interactive acknowledgments.** A `/clearmap:exclusions` command and a
+  `clearmap acknowledge add|list|remove` CLI so the agent (or a user) records an
+  accepted risk without hand-editing JSON; owner defaults to git `user.email` and
+  date to today, and entries are validated before they are written.
+
+### Fixed
+- The report derives assessment completeness from the reasoning completion flag
+  rather than category finding counts, so a truncated review that happened to find
+  an issue in every reasoning-only category is no longer shown as complete; a
+  completed review with zero AI findings no longer reads as "not part of this run".
+- Data-egress statement is provider-specific; "Assessment: Complete" requires a
+  scan-fingerprint-bound completion manifest; the skills-only installer resolves
+  its engine root without an environment variable.
+
+## [0.3.0]
 
 Plugin-first release: ClearMap becomes an installable agent-native plugin
 (Claude Code, Codex, and Agent Skills) on top of a hardened engine.

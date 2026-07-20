@@ -1,6 +1,6 @@
 # ClearMap HIPAA Risk Report: golden-fixture
 
-**Generated:** 2026-01-01 · **ClearMap:** v0.3.0 · **Regulatory baseline:** 2026.1 (as of 2026-06-01)
+**Generated:** 2026-01-01 · **ClearMap:** v0.4.0 · **Regulatory baseline:** 2026.1 (as of 2026-06-01)
 
 > **Technical risk signal, not a certification.** This report is not a HIPAA compliance certification and does not mean the product is or is not HIPAA compliant.
 

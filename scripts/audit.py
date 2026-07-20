@@ -28,7 +28,9 @@ def _run(module: str, *args: str) -> subprocess.CompletedProcess:
 
 def _summary(findings_path: Path, repo: str, out_dir: Path, provider: str) -> None:
     data = json.loads(findings_path.read_text())
-    m = report_mod.build_model(data, repo, date.today().isoformat())
+    target = out_dir.parent
+    acks = report_mod.ack_mod.load(target)
+    m = report_mod.build_model(data, repo, date.today().isoformat(), acknowledgments=acks)
     s, state = m["scores"], m["score_state"]
     print("\nClearMap audit complete.\n")
     if state == "unavailable":
@@ -40,6 +42,9 @@ def _summary(findings_path: Path, repo: str, out_dir: Path, provider: str) -> No
         print(f"Assessment: {'Complete' if state == 'complete' else 'Automated layer only'}")
     print(f"Findings: {s['n_critical']} critical, {s['n_high']} high, "
           f"{m['n_medium']} medium, {m['n_low']} low")
+    if m["n_acknowledged"]:
+        print(f"Acknowledged: {m['n_acknowledged']} accepted as documented risk "
+              "(excluded from the score)")
     if m["exec"]["top"]:
         print("\nTop issues:")
         for i, v in enumerate(m["exec"]["top"], 1):

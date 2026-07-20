@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "clearmap",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "source": "github:vantage-io/clearmap",
       "description": "HIPAA-aware healthcare development guidance and technical-risk auditing inside your coding agent.",
       "license": "Apache-2.0",

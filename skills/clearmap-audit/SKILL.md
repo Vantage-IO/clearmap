@@ -63,6 +63,7 @@ ClearMap audit complete.
 ClearMap HIPAA Technical Risk Score: <score> (or "unavailable")
 Assessment: Complete | Automated layer only | Score unavailable
 Findings: <c> critical, <h> high, <m> medium, <l> low
+Acknowledged: <n> accepted as documented risk (only if any; excluded from the score)
 
 Top issues:
 1. ...
@@ -88,3 +89,18 @@ Always include the qualification: a technical code-risk signal only, not a compl
 ## Fixing findings
 
 When asked to fix findings: read the actual code, confirm the finding is valid, implement the narrowest safe correction, update tests, rerun relevant tests, then rerun ClearMap. Never suppress a finding just to raise the score; any suppression needs a reason (`clearmap:allow <rule> reason="..."`). Summarize which findings were fixed, disputed, or still open. Do not refactor unrelated architecture solely to raise the score.
+
+## Acknowledged risks
+
+The report reads `clearmap-acknowledgments.json` from the repo root (or `.clearmap/acknowledgments.json`) each time it is generated. An acknowledgment accepts a valid finding as documented risk (for example PHI to an LLM under a signed BAA with zero data retention): it stays visible and listed in the Acknowledgments appendix but does not deduct from the score. When a finding cannot be judged from code alone and the user says it is covered by a control ClearMap cannot see (a BAA, a VPC boundary, an upstream gateway), tell them they can acknowledge it. Do not invent acknowledgments; acknowledging a finding is the user's decision, on the record, and needs their reason in their words.
+
+Write it for them with the CLI (never hand-edit the JSON). This is what `/clearmap:exclusions` drives:
+
+```bash
+python3 "$ROOT/scripts/acknowledgments.py" list --target "$TARGET"
+python3 "$ROOT/scripts/acknowledgments.py" add --reference "<Reference from the finding>" \
+    --reason "<the user's explanation>" [--file "<path>"] [--expires "YYYY-MM-DD"] --target "$TARGET"
+python3 "$ROOT/scripts/acknowledgments.py" remove --reference "<ref>" --target "$TARGET"
+```
+
+`add` defaults owner to git `user.email` and date to today, validates the entry, and refuses any wording that asserts HIPAA compliance. After adding or removing, regenerate the report so the score reflects it.

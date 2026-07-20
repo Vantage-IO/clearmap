@@ -13,7 +13,7 @@
       "name": "clearmap",
       "source": "./",
       "description": "HIPAA-aware healthcare development and technical-risk auditing inside your coding agent.",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "author": {
         "name": "Vantage IO",
         "url": "https://vantageio.com"

@@ -109,15 +109,23 @@ def score_findings(findings: list[dict], applicability: dict | None = None,
     fully reviewed" (back-compat: no behavior change)."""
     applicability = applicability or {}
     reasoning_ran = source_layer is None or "reasoning" in source_layer
+    # Acknowledged findings (a documented, accepted risk, e.g. PHI to an LLM under
+    # a signed BAA) stay in `findings` for display but must NOT deduct, cap the
+    # ceiling, or count as live risk. Surface detection and the "not reviewed"
+    # test still use ALL findings: an acknowledged finding still proves the
+    # category applies and was reviewed. Expired acknowledgments are not flagged
+    # `acknowledged`, so they score normally again.
+    active = [f for f in findings if not f.get("acknowledged")]
     cats = {}
     for code in WEIGHTS:
-        det = [f for f in findings if f.get("category") == code and f.get("source") == "deterministic"]
-        rea = [f for f in findings if f.get("category") == code and f.get("source") == "reasoning"]
+        cat_all = [f for f in findings if f.get("category") == code]
+        det = [f for f in active if f.get("category") == code and f.get("source") == "deterministic"]
+        rea = [f for f in active if f.get("category") == code and f.get("source") == "reasoning"]
         det_deduct = sum(DEDUCTION.get(f.get("severity", "medium"), 8) for f in det)
         rea_deduct = min(REASONING_CAP, sum(DEDUCTION.get(f.get("severity", "medium"), 8) for f in rea))
-        applicable = bool(det or rea) or applicability.get(code, True)
+        applicable = bool(cat_all) or applicability.get(code, True)
         not_reviewed = (applicable and not reasoning_ran and code in REASONING_ONLY
-                        and not det and not rea)
+                        and not cat_all)
         if not_reviewed:
             applicable = False  # excluded from composite, but labeled distinctly
         cats[code] = {
@@ -140,7 +148,7 @@ def score_findings(findings: list[dict], applicability: dict | None = None,
     blended_raw = _clamp(sum(v["blended_score"] * v["weight"] for v in applic.values()) / wsum)
     # Topline = blended, then capped by the worst-severity ceiling (worst dominates;
     # criticals compound with diminishing returns). The lower of the two governs.
-    ceiling, reason = severity_ceiling(findings)
+    ceiling, reason = severity_ceiling(active)
     score = _clamp(min(blended_raw, ceiling))
 
     return {
@@ -149,10 +157,11 @@ def score_findings(findings: list[dict], applicability: dict | None = None,
         "ceiling_reason": reason,
         "composite_blended_raw": blended_raw,   # weighted composite before ceiling (disclosure)
         "composite_deterministic": det_composite,  # deterministic-only (disclosure)
-        "n_critical": sum(1 for f in findings if f.get("severity") == "critical"),
-        "n_high": sum(1 for f in findings if f.get("severity") == "high"),
-        "n_medium": sum(1 for f in findings if f.get("severity") == "medium"),
-        "n_low": sum(1 for f in findings if f.get("severity") == "low"),
+        "n_critical": sum(1 for f in active if f.get("severity") == "critical"),
+        "n_high": sum(1 for f in active if f.get("severity") == "high"),
+        "n_medium": sum(1 for f in active if f.get("severity") == "medium"),
+        "n_low": sum(1 for f in active if f.get("severity") == "low"),
+        "n_acknowledged": sum(1 for f in findings if f.get("acknowledged")),
         "posture": posture(score),
         "categories": cats,
         "reasoning_ran": reasoning_ran,

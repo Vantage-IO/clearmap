@@ -168,6 +168,8 @@ def _sev_chip(v: dict) -> str:
 
 
 def _status_chip(v: dict) -> str:
+    if v["verification_short"] == "Acknowledged":
+        return '<span class="chip" style="background:#475569">Acknowledged</span>'
     if v["verification_short"] == "Confirmed":
         return '<span class="chip" style="background:#15803d">Confirmed</span>'
     return ('<span class="chip outline" style="color:#00348C">'
@@ -207,6 +209,8 @@ def _finding_card(v: dict) -> str:
     if v["remediation"]:
         rows.append(("Remediation", _e(v["remediation"])))
     rows.append(("Verification", _e(v["verification"])))
+    if v["acknowledged"] and v["acknowledgment_line"]:
+        rows.append(("Accepted risk", _e(v["acknowledgment_line"])))
     if v["ref_line"]:
         rows.append(("Reference", f'<span class="refline">{_e(v["ref_line"])}</span>'))
     dl = "".join(f"<dt>{k}</dt><dd>{val}</dd>" for k, val in rows)
@@ -347,9 +351,12 @@ def render_html(m: dict) -> str:
             parts.append(f"<tr><td>{_sev_chip(v)}</td><td>{_e(v['title'])}</td>"
                          f"<td>{loc}</td><td>{cit}</td><td>{_status_chip(v)}</td></tr>")
         parts.append("</tbody></table>")
+        ack_legend = (' Acknowledged = a valid finding the code owner has accepted as documented '
+                      'risk (see the Acknowledgments appendix); excluded from the score.'
+                      if m["n_acknowledged"] else "")
         parts.append('<p class="legend">Confirmed = found by an automated rule, reproducible '
                      'from run to run. Needs verification = identified by AI-assisted review '
-                     'and awaiting confirmation by an engineer.</p>')
+                     'and awaiting confirmation by an engineer.' + ack_legend + '</p>')
     else:
         parts.append("<p><em>No findings in the categories that apply to this codebase.</em></p>")
 
@@ -443,6 +450,25 @@ def render_html(m: dict) -> str:
                 f'<tr><td>{_e(loc)}</td><td>{_e(r.get("source", ""))}</td>'
                 f'<td>{_e(r.get("rule_id") or r.get("category") or "")}</td>'
                 f'<td>{_e(r.get("reason", ""))}</td><td>{_e(r.get("expires") or "")}</td></tr>')
+        parts.append("</tbody></table>")
+
+    # Appendix: acknowledgments (accepted, documented risks)
+    if m["acknowledgments"]:
+        parts.append('<h2><span class="secno">K</span>Appendix: Acknowledgments</h2>')
+        parts.append('<p class="para">Findings the code owner has accepted as documented risk, '
+                     'each with an owner, date, and explanation. Active acknowledgments are '
+                     'excluded from the score; expired ones are scored again. This records a '
+                     'decision, it does not remove the finding.</p>')
+        parts.append('<table class="grid"><thead><tr><th>Reference</th><th>Scope</th>'
+                     '<th>Owner</th><th>Date</th><th>Expires</th><th>Status</th>'
+                     '<th>Reason</th></tr></thead><tbody>')
+        for a in m["acknowledgments"]:
+            scope_txt = a.get("file") or "all matching findings"
+            parts.append(
+                f'<tr><td>{_e(a["reference"])}</td><td>{_e(scope_txt)}</td>'
+                f'<td>{_e(a["owner"])}</td><td>{_e(a["date"])}</td>'
+                f'<td>{_e(a.get("expires") or "")}</td><td>{_e(a["status"])}</td>'
+                f'<td>{_e(a["reason"])}</td></tr>')
         parts.append("</tbody></table>")
 
     # Appendix B: about + disclaimer + closing note

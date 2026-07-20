@@ -14,6 +14,7 @@ command. The `python3 scripts/<name>.py` invocations keep working unchanged.
     clearmap export <findings.json> --format sarif|csv --out <file>
     clearmap issues [findings.json] [--severity ...]
     clearmap suppressions [findings.json] [--as-of DATE] [--fail-on-expired]
+    clearmap acknowledge add|list|remove [--reference R] [--reason "..."] [--target .]
     clearmap init install|uninstall|doctor <target>
     clearmap calibrate --expected <exp.json> --candidate <run.json> ...
     clearmap score <findings.json>
@@ -43,6 +44,7 @@ COMMANDS = {
     "doctor": "doctor",
     "audit": "audit",
     "reason": "reason",
+    "acknowledge": "acknowledgments",
 }
 
 

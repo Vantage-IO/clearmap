@@ -31,6 +31,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import acknowledgments as ack_mod  # noqa: E402
 import scoring  # noqa: E402
 from _version import __version__ as CLEARMAP_VERSION  # noqa: E402
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -259,6 +260,19 @@ def _finding_view(f: dict, baseline: dict) -> dict:
     file, line = f.get("file"), f.get("line")
     location = f"{file}:{line}" if file and line else (file or "")
     citation = resolve_citation(f["hipaa_ref"], baseline) if f.get("hipaa_ref") else None
+    ack = f.get("acknowledged")
+    verification_short = VERIFICATION_SHORT.get(src, "Confirmed")
+    acknowledgment_line = ""
+    if ack:
+        verification_short = "Acknowledged"
+        expires = f", expires {ack['expires']}" if ack.get("expires") else ""
+        verification = (f"Acknowledged as accepted risk by {ack['owner']} on "
+                        f"{ack['date']}{expires}")
+        acknowledgment_line = ack.get("reason", "")
+    elif f.get("acknowledgment_expired"):
+        exp = f["acknowledgment_expired"]
+        acknowledgment_line = (f"A previous acknowledgment by {exp['owner']} "
+                               f"expired on {exp.get('expires', '')}; this finding is live again.")
     return {
         "title": f.get("title") or (_humanize(rid) if rid else "Finding"),
         "severity": sev,
@@ -272,7 +286,9 @@ def _finding_view(f: dict, baseline: dict) -> dict:
                               or CATEGORY_REVIEWER_Q.get(f.get("category", ""), "")),
         "remediation": f.get("remediation", ""),
         "verification": verification,
-        "verification_short": VERIFICATION_SHORT.get(src, "Confirmed"),
+        "verification_short": verification_short,
+        "acknowledged": bool(ack),
+        "acknowledgment_line": acknowledgment_line,
         "ref_line": ref_line,
     }
 
@@ -289,9 +305,15 @@ def _findings_label(c: dict) -> str:
 
 
 def build_model(data: dict, repo: str, date: str,
-                provenance: dict | None = None) -> dict:
+                provenance: dict | None = None,
+                acknowledgments: list[dict] | None = None) -> dict:
     """All content decisions for the report, shared by every output format."""
     findings = data.get("findings", [])
+    # Annotate acknowledged / expired findings before scoring so an accepted risk
+    # does not deduct. Acknowledged findings stay in `findings` (shown, marked);
+    # they are only excluded from the exec "top" list and the priority list, which
+    # are action lists. The Acknowledgments appendix records each one.
+    ack = ack_mod.apply(findings, acknowledgments or [], date)
     if provenance:
         provenance = dict(provenance)
         if provenance.get("source"):
@@ -306,8 +328,9 @@ def build_model(data: dict, repo: str, date: str,
     def sev_key(f):
         return (SEV_ORDER.get(f.get("severity"), 9), f.get("category", ""), f.get("file", ""))
 
+    active = [f for f in findings if not f.get("acknowledged")]
     ordered = sorted(findings, key=sev_key)
-    priority = sorted([f for f in findings if f.get("severity") in ("critical", "high")
+    priority = sorted([f for f in active if f.get("severity") in ("critical", "high")
                        and f.get("category") != "AI-RAG"], key=sev_key)
     ai = sorted([f for f in findings if f.get("category") == "AI-RAG"], key=sev_key)
 
@@ -364,7 +387,7 @@ def build_model(data: dict, repo: str, date: str,
     # Executive summary.
     n_medium = scores.get("n_medium", sum(1 for f in findings if f.get("severity") == "medium"))
     n_low = scores.get("n_low", sum(1 for f in findings if f.get("severity") == "low"))
-    top = [_finding_view(f, baseline) for f in ordered[:3]]
+    top = [_finding_view(f, baseline) for f in sorted(active, key=sev_key)[:3]]
     next_steps: list[str] = []
     if scores["n_critical"]:
         s = "s" if scores["n_critical"] > 1 else ""
@@ -391,6 +414,15 @@ def build_model(data: dict, repo: str, date: str,
     if suppressed:
         summary_line += (f" {suppressed} likely false positive"
                          f"{'s were' if suppressed != 1 else ' was'} suppressed automatically.")
+    n_acknowledged = ack["n_acknowledged"]
+    if n_acknowledged:
+        summary_line += (f" {n_acknowledged} finding{'s were' if n_acknowledged != 1 else ' was'} "
+                         "acknowledged as accepted risk and excluded from the score; "
+                         "see the Acknowledgments appendix.")
+    if ack["n_expired"]:
+        summary_line += (f" {ack['n_expired']} acknowledgment"
+                         f"{'s have' if ack['n_expired'] != 1 else ' has'} expired and "
+                         "the underlying finding is scored again.")
 
     # Scope and method paragraphs (plain language, no pipeline jargon).
     engines = data.get("engines", {})
@@ -566,6 +598,9 @@ def build_model(data: dict, repo: str, date: str,
         "n_low": n_low,
         "suppressed_count": suppressed,
         "suppressions": data.get("suppressions", []),
+        "acknowledgments": ack["applied"],
+        "n_acknowledged": n_acknowledged,
+        "n_acknowledgments_expired": ack["n_expired"],
         "exec": {"top": top, "next_steps": next_steps, "summary_line": summary_line},
         "scope": scope,
         "citations": citations,
@@ -600,6 +635,8 @@ def _block(v: dict) -> str:
     if v["remediation"]:
         lines.append(f"- **Remediation:** {v['remediation']}")
     lines.append(f"- **Verification:** {v['verification']}")
+    if v["acknowledged"] and v["acknowledgment_line"]:
+        lines.append(f"- **Accepted risk:** {v['acknowledgment_line']}")
     if v["ref_line"]:
         lines.append(f"- **Reference:** {v['ref_line']}")
     return "\n".join(lines)
@@ -800,6 +837,22 @@ def render_md(m: dict) -> str:
                        f"{_cell(r.get('reason', ''), 60)} | {_cell(r.get('expires') or '', 12)} |")
         out.append("")
 
+    # Appendix: acknowledgments (accepted, documented risks)
+    if m["acknowledgments"]:
+        out.append("## Appendix: Acknowledgments\n")
+        out.append("Findings the code owner has accepted as documented risk, each with an owner, "
+                   "date, and explanation. Active acknowledgments are excluded from the score; "
+                   "expired ones are scored again. This records a decision, it does not remove "
+                   "the finding.\n")
+        out.append("| Reference | Scope | Owner | Date | Expires | Status | Reason |")
+        out.append("|-----------|-------|-------|------|---------|--------|--------|")
+        for a in m["acknowledgments"]:
+            scope_txt = a.get("file") or "all matching findings"
+            out.append(f"| {_cell(a['reference'], 24)} | {_cell(scope_txt, 30)} | "
+                       f"{_cell(a['owner'], 24)} | {a['date']} | {a.get('expires') or ''} | "
+                       f"{a['status']} | {_cell(a['reason'], 80)} |")
+        out.append("")
+
     # Appendix B: about + disclaimer + closing note
     out.append("## Appendix B: About this report\n")
     out.append(m["disclaimer"] + "\n")
@@ -835,9 +888,12 @@ def render_json(m: dict) -> str:
                    "medium": m["n_medium"], "low": m["n_low"]},
         "assessment": m["assessment"],
         "not_reviewed_categories": s.get("not_reviewed_categories", []),
-        "findings": [{k: f.get(k) for k in keys} for f in m["findings"]],
+        "findings": [{**{k: f.get(k) for k in keys},
+                      "acknowledged": f.get("acknowledged") or None} for f in m["findings"]],
         "suppressions": m["suppressions"],
         "suppressed_count": m["suppressed_count"],
+        "acknowledgments": m["acknowledgments"],
+        "acknowledged_count": m["n_acknowledged"],
         "disclaimer": m["disclaimer"],
         "closing_note": m["cta"],
         "closing_url": m["cta_url"],
@@ -853,6 +909,9 @@ def main() -> int:
     ap.add_argument("--repo-path", type=Path, default=None,
                     help="path to the scanned git repo; embeds source provenance "
                          "(branch, commit, last commit, remote) at the top of the report")
+    ap.add_argument("--acknowledgments", type=Path, default=None,
+                    help="directory holding clearmap-acknowledgments.json "
+                         "(defaults to --repo-path)")
     ap.add_argument("--date", default=None)
     ap.add_argument("--format", choices=["md", "html", "json", "both", "all"], default="md",
                     help="markdown, self-contained HTML, JSON, both (md+html), or all "
@@ -864,7 +923,9 @@ def main() -> int:
     repo = args.repo or (args.repo_path.resolve().name if args.repo_path
                          else "the scanned repository")
     date = args.date or datetime.date.today().isoformat()
-    model = build_model(data, repo, date, provenance)
+    ack_root = args.acknowledgments or args.repo_path
+    acks = ack_mod.load(ack_root) if ack_root else []
+    model = build_model(data, repo, date, provenance, acknowledgments=acks)
 
     outputs: list[tuple[Path, str]] = []
     if args.format in ("md", "both", "all"):

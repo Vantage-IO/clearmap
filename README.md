@@ -60,7 +60,7 @@ Day to day this is a rounding error; only the audit spends real tokens, and only
 
 ## Updating ClearMap
 
-When a new version ships, refresh it.
+New versions are published as [GitHub releases](https://github.com/Vantage-IO/clearmap/releases). When one ships, refresh your install.
 
 **Claude Code:**
 
@@ -69,7 +69,7 @@ When a new version ships, refresh it.
 /plugin update clearmap
 ```
 
-Then restart Claude Code to apply the update.
+Then restart Claude Code to apply the update. Confirm it took with `/plugin` (the version is shown next to `clearmap@vantage-io`).
 
 **Codex** (Agent Skills install): pull the latest and reinstall over the old copy:
 
@@ -77,6 +77,8 @@ Then restart Claude Code to apply the update.
 cd clearmap && git pull
 python3 scripts/install_agent_skills.py --scope user --agent codex --force
 ```
+
+Check the running version any time with `clearmap --version` (or `python3 scripts/cli.py --version`).
 
 ## Generate the report in any format
 
@@ -90,6 +92,10 @@ The audit writes the report automatically; regenerate it in any format without r
 ```
 
 In Codex or another agent: "Generate the ClearMap report as JSON." From the terminal: `clearmap report .clearmap/findings.json --format all`. Machine-readable exports (SARIF, CSV) via `clearmap export`. See [docs/auditing.md](docs/auditing.md).
+
+## Acknowledging accepted risks
+
+Some findings are technically valid but already mitigated by controls ClearMap cannot see in the code, for example PHI sent to an LLM under a signed Business Associate Agreement with zero data retention. Run `/clearmap:exclusions` and the agent walks you through accepting a finding (which one, why, optional expiry) and writes it for you, no JSON editing required. The finding stays visible in the report, marked as an accepted risk and listed in an Acknowledgments appendix, but it no longer deducts from the score. It records a decision; it does not hide the finding. See [docs/auditing.md](docs/auditing.md#acknowledging-accepted-risks) and [clearmap-acknowledgments.example.json](clearmap-acknowledgments.example.json).
 
 ## What ClearMap does not replace
 
@@ -105,10 +111,6 @@ Not a HIPAA compliance certification, and a score does not mean a product is or 
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
-
-## Roadmap
-
-- **Acknowledge findings covered by compensating controls.** Some findings are technically valid but already mitigated by controls ClearMap cannot see in code, for example PHI sent to an LLM under a signed BAA with zero data retention. A coming release will let you acknowledge such a finding with a documented justification so it stays visible in the report as an accepted, documented risk but no longer deducts from the score or recurs as an unresolved critical.
 
 ---
 

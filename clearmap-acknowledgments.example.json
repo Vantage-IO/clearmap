@@ -1,0 +1,19 @@
+{
+  "_comment": "Copy this to clearmap-acknowledgments.json in your repo root and edit. It records findings you have accepted as documented risk, so they stay visible in the report but do not deduct from the score. It records a decision; it does not hide the finding. Each entry needs a reference, owner, date, and reason; expires is optional. 'reference' is the Reference shown under each finding in the report (a check id like AI-RAG-01 or a rule id), without the '(... rule)' note. Omit 'file' to accept every finding with that reference, or set it to narrow the acknowledgment to one file.",
+  "acknowledgments": [
+    {
+      "reference": "AI-RAG-01",
+      "owner": "you@example.com",
+      "date": "2026-07-20",
+      "expires": "2027-07-20",
+      "reason": "PHI sent to our LLM provider is covered by a signed Business Associate Agreement with zero data retention; de-identification on the way out is planned."
+    },
+    {
+      "reference": "access-fastapi-unauthenticated-phi-read",
+      "file": "backend/api/internal.py",
+      "owner": "you@example.com",
+      "date": "2026-07-20",
+      "reason": "This endpoint is only reachable inside the VPC, behind the gateway that enforces authentication upstream."
+    }
+  ]
+}
