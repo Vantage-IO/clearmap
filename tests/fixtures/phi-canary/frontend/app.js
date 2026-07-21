@@ -3,7 +3,7 @@
 // greppable; tests/test_phi_leak_e2e.py fails if any appears downstream.
 
 function persistRecord() {
-  localStorage.setItem("patient_ssn_record", JSON.stringify({ ssn: "987-65-4329", contact: "jane.canary@example.org", note: "MRN: 4455667" }));
+  localStorage.setItem("patient_ssn_record", JSON.stringify({ ssn: "987-65-4329", contact: "jane.canary@example.org", phone: "(555)014-9876", note: "MRN: 4455667" }));
 }
 
 function lookupRecord() {

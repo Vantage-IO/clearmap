@@ -20,6 +20,7 @@ FIXTURE = REPO / "tests" / "fixtures" / "phi-canary"
 CANARIES = [
     "987-65-4329",                      # SSN
     "jane.canary@example.org",          # email
+    "(555)014-9876",                    # phone, no-space paren form
     "4455667",                          # MRN digits
     "CanaryPass99XyZ",                  # DB password
     "canaryAAAABBBBCCCCDDDD1234",       # sk- key body
@@ -63,6 +64,7 @@ class TestPhiLeakE2E(unittest.TestCase):
         self._assert_clean(text, "findings.json")
         self.assertIn("[SSN]", text)
         self.assertIn("[EMAIL]", text)
+        self.assertIn("[PHONE]", text)
         self.assertIn("[MRN]", text)
 
     def test_markdown_report_clean(self):
