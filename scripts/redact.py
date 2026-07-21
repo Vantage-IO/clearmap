@@ -28,8 +28,8 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r'\bMRN[:#=]?\s*\d+\b', re.IGNORECASE), "[MRN]"),       # MRN (incl. mrn=123 URL form)
     (re.compile(r'\b\d{1,2}/\d{1,2}/\d{4}\b'), "[DATE]"),               # DOB-like, US format
     (re.compile(r'\b\d{4}-\d{2}-\d{2}\b'), "[DATE]"),                   # DOB-like, ISO format
-    (re.compile(r'(?<![\d.])(\+?1[-. ]?)?\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}(?![\d.])'),
-     "[PHONE]"),                                                        # US phone
+    (re.compile(r'(?<![\d.])(\+?1[-. ]?)?(\(\d{3}\)[-. ]?|\d{3}[-. ])\d{3}[-. ]\d{4}(?![\d.])'),
+     "[PHONE]"),                                                        # US phone, incl. (NNN)NNN-NNNN
     (re.compile(r'\b\d+\s+[A-Za-z][\w.]*(\s[A-Za-z][\w.]*)?\s+'
                 r'(Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|'
                 r'Court|Ct|Way|Place|Pl)\b\.?', re.IGNORECASE), "[ADDRESS]"),

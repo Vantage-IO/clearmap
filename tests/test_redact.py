@@ -64,7 +64,7 @@ class TestRedact(unittest.TestCase):
 
     def test_us_phone_forms(self):
         for form in ("555-867-5309", "(555) 867-5309", "555.867.5309",
-                     "+1 555-867-5309", "1-555-867-5309"):
+                     "+1 555-867-5309", "1-555-867-5309", "(555)867-5309"):
             out = redact(f"call {form} today")
             self.assertNotIn("867", out, form)
             self.assertIn("[PHONE]", out, form)
