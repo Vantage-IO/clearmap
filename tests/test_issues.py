@@ -29,9 +29,22 @@ class TestIssues(unittest.TestCase):
 
     def test_severity_filter(self):
         proc = run(str(GOLDEN), "--severity", "low")
-        self.assertEqual(proc.returncode, 0)  # no critical/high in the list
+        # The filter narrows the printed list only; a critical is still open,
+        # so the gate still trips. A view filter must never disarm the gate.
+        self.assertEqual(proc.returncode, 1)
         self.assertIn("JWT", proc.stdout)
         self.assertNotIn("Database connection string", proc.stdout)
+
+    def test_gate_clean_when_no_critical_or_high(self):
+        import tempfile
+        data = json.loads(GOLDEN.read_text())
+        data["findings"] = [f for f in data["findings"]
+                            if f.get("severity") not in ("critical", "high")]
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td, "findings.json")
+            p.write_text(json.dumps(data))
+            proc = run(str(p))
+            self.assertEqual(proc.returncode, 0)
 
     def test_json_format(self):
         proc = run(str(GOLDEN), "--format", "json")

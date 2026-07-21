@@ -8,6 +8,8 @@ report.
 
 Default input discovery: ./.clearmap/findings.json, then ./findings.json.
 Exit code 1 when any critical or high finding is open (usable as a gate).
+The --severity filter narrows the printed list only; it never changes the
+exit code, so the gate cannot be disarmed by a view filter.
 
     python3 scripts/issues.py [findings.json] [--severity critical,high]
         [--format table|md|json]
@@ -116,7 +118,11 @@ def main() -> int:
     else:
         print(_fmt_table(rows, model["scores"]))
 
-    return 1 if any(r["severity"] in ("critical", "high") for r in rows) else 0
+    # Gate on ALL open findings, not the filtered view: --severity narrows what
+    # is printed, but must never disarm the CI gate the docstring promises.
+    # Scores already exclude acknowledged (accepted-risk) findings.
+    scores = model["scores"]
+    return 1 if (scores["n_critical"] or scores["n_high"]) else 0
 
 
 if __name__ == "__main__":
