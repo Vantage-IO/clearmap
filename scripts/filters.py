@@ -35,6 +35,13 @@ VENDORED_PATH_RES = [re.compile(p) for p in (
 
 _TEST_PATH_RE = re.compile(r"(^|/)(tests?|__tests__|__mocks__|spec)/")
 
+
+def _is_phi_literal(f: dict) -> bool:
+    """A Presidio PHI-literal finding is filed under SECRETS but is a real-looking
+    patient identifier, not a credential. It must never be downgraded with
+    secret/credential wording: a real PHI literal in a fixture is still a leak."""
+    return f.get("rule_id") == "presidio-phi-literal" or f.get("engine") == "presidio"
+
 _TEMPLATED_RE = re.compile(
     r"\$\{[A-Za-z_][A-Za-z0-9_]*\}"      # ${VAR}
     r"|\{\{\s*[\w.]+\s*\}\}"             # {{ var }}
@@ -129,9 +136,12 @@ def _gitignored_env_file(f: dict, target: Path, git_cache: dict) -> bool:
     if not Path(rel).name.startswith(".env"):
         return False
     if rel not in git_cache:
-        proc = subprocess.run(["git", "-C", str(target), "check-ignore", "-q", rel],
-                              capture_output=True, check=False)
-        git_cache[rel] = proc.returncode == 0
+        try:
+            proc = subprocess.run(["git", "-C", str(target), "check-ignore", "-q", rel],
+                                  capture_output=True, check=False, timeout=30)
+            git_cache[rel] = proc.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            git_cache[rel] = False  # a hung/absent git => treat as not gitignored
     return git_cache[rel]
 
 
@@ -219,7 +229,8 @@ def apply_filters(findings: list[dict], target: Path) -> tuple[list[dict], list[
             ledger.append(_rec(f, rel, source, reason, expires, "suppressed"))
             continue
 
-        if cat == "SECRETS" and _TEST_PATH_RE.search(rel):
+        if (cat == "SECRETS" and _TEST_PATH_RE.search(rel)
+                and not _is_phi_literal(f)):
             f = {**f, "severity": "low", "title": f.get("title", "")
                  + " (test-fixture path: verify it is not a real credential)"}
             ledger.append(_rec(f, rel, "test-path-downgrade", "test-fixture path", None, "downgraded"))

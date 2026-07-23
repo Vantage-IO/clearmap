@@ -251,6 +251,34 @@ class TestProvenance(unittest.TestCase):
             self.assertNotIn("ghp_supersecret", out)
             self.assertIn("https://github.com/x/y.git", out)
 
+    def test_markdown_provenance_neutralizes_raw_html(self):
+        # A crafted commit subject must not carry raw HTML into the markdown.
+        prov = dict(self.PROV, subject='fix <img src=x onerror=alert(1)> bug')
+        model = report.build_model(DATA, "patient-portal", "2026-07-06", prov)
+        md = report.render_md(model)
+        self.assertNotIn("<img", md)
+        self.assertIn("&lt;img", md)
+
+
+class TestHrefSafety(unittest.TestCase):
+    """Every emitted href must be https-only; unsafe schemes are dropped."""
+
+    def test_safe_href_allows_https_only(self):
+        import report_html
+        self.assertEqual(report_html._safe_href("https://www.hhs.gov/x"),
+                         "https://www.hhs.gov/x")
+        for bad in ("javascript:alert(1)", "http://plain.example",
+                    "data:text/html,x", "/relative/path", "", None):
+            self.assertEqual(report_html._safe_href(bad), "")
+
+    def test_non_https_citation_url_emits_no_anchor(self):
+        from report_html import _citation_html
+        cit = {"text": "45 CFR 164.312", "url": "javascript:alert(1)"}
+        out = _citation_html(cit)
+        self.assertNotIn("<a", out)
+        self.assertNotIn("javascript:", out)
+        self.assertIn("45 CFR 164.312", out)
+
 
 class TestHtml(unittest.TestCase):
     @classmethod

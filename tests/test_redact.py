@@ -48,7 +48,8 @@ class TestRedact(unittest.TestCase):
             self.assertIn("[MRN]", out, form)
 
     def test_dob_like_date(self):
-        out = redact("dob: 3/14/1985")
+        # No PHI key: exercises the standalone US-format [DATE] literal pattern.
+        out = redact("appointment 3/14/1985 confirmed")
         self.assertNotIn("3/14/1985", out)
         self.assertIn("[DATE]", out)
 
@@ -89,6 +90,55 @@ class TestRedact(unittest.TestCase):
     def test_structure_is_preserved(self):
         out = redact('localStorage.setItem("patient", x)')
         self.assertIn("localStorage.setItem", out)
+
+    def test_quoted_key_secret(self):
+        for line, leak in (('"password": "hunter2prod"', "hunter2prod"),
+                           ("'api_key': 'abc12345'", "abc12345"),
+                           ('{"secret_token" : "s3cr3tvalue99"}', "s3cr3tvalue99")):
+            out = redact(line)
+            self.assertNotIn(leak, out, line)
+            self.assertIn("[REDACTED]", out, line)
+
+    def test_quoted_key_phi(self):
+        out = redact('"patient_name": "Jane Doe"')
+        self.assertNotIn("Jane Doe", out)
+        self.assertIn("[REDACTED_PHI]", out)
+
+    def test_unquoted_value_secret(self):
+        # Unquoted YAML/env value form.
+        for line, leak in (("password: hunter2prod", "hunter2prod"),
+                           ("API_KEY=abc12345def", "abc12345def"),
+                           ("db_password:  s3cr3t99", "s3cr3t99")):
+            out = redact(line)
+            self.assertNotIn(leak, out, line)
+            self.assertIn("[REDACTED]", out, line)
+
+    def test_truncated_line_does_not_leak_prefix(self):
+        # Closing quote is missing at end of input; the value prefix must not leak.
+        for line, leak in (('password = "hunter2prod', "hunter2prod"),
+                           ("'api_key': 'abc12345", "abc12345"),
+                           ('patient_name: "Jane Do', "Jane Do")):
+            out = redact(line)
+            self.assertNotIn(leak, out, line)
+            self.assertTrue("[REDACTED]" in out or "[REDACTED_PHI]" in out, line)
+
+    def test_precision_keeps_obvious_non_secret_code(self):
+        # A bare non-literal value (keyword, type, env lookup, call) is structure,
+        # not a credential: keep it rather than over-redact.
+        for line in ("password = None", "api_token: str",
+                     'password = os.environ["DB_PASS"]',
+                     "secret = get_secret()"):
+            out = redact(line)
+            self.assertNotIn("[REDACTED]", out, line)
+
+    def test_long_line_is_bounded(self):
+        # A pathological single line must not hang the redactor (O(n^2) guard).
+        import time
+        line = "password" * 5000 + " = " + "x" * 200000
+        t0 = time.perf_counter()
+        out = redact(line)
+        self.assertLess(time.perf_counter() - t0, 2.0)
+        self.assertLessEqual(len(out), 10_000 + len("[REDACTED]"))
 
 
 if __name__ == "__main__":

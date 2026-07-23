@@ -2,10 +2,12 @@
 """ClearMap scoring.
 
 Each category starts at 100 and deducts by severity, floored at 0. The headline
-composite is computed from the DETERMINISTIC layer only, so it is reproducible.
-A blended composite that also reflects reasoning findings is reported
-separately; reasoning's contribution per category is capped so it cannot tank a
+(topline) score is the BLENDED composite: it reflects both deterministic and
+reasoning findings and then errs on the side of caution via the worst-severity
+ceiling. Reasoning's contribution per category is capped so it cannot tank a
 category or swing wildly run-to-run (rubric-bound, "agent-identified, verify").
+A deterministic-only composite is also reported, separately, purely as a
+reproducible disclosure figure; it is never the topline number.
 
 Importable (`score_findings`) and runnable:
     python3 scripts/scoring.py findings.json

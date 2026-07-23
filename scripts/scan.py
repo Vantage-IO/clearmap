@@ -126,7 +126,11 @@ def _changed_files(target: Path) -> list[str]:
     NUL-delimited git output so paths with spaces, tabs, newlines, or non-ASCII
     characters are never split or silently dropped."""
     def _z(cmd: list[str]) -> list[str]:
-        out = subprocess.run(cmd, capture_output=True, text=True, check=False).stdout
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 check=False, timeout=30).stdout
+        except (OSError, subprocess.SubprocessError):
+            return []  # a hung/absent git must not hang or crash the scan
         return [p for p in out.split("\0") if p]
     diff = _z(["git", "-C", str(target), "diff", "-z", "--name-only", "HEAD"])
     untracked = _z(["git", "-C", str(target), "ls-files", "-z", "--others", "--exclude-standard"])
@@ -146,7 +150,24 @@ def _semgrep_targets(target: Path, paths: list[str] | None) -> list[str]:
     that and make the scanned set a deterministic function of the tree.
     """
     if paths is not None:
-        return [p for p in paths if Path(p).suffix in _SRC_EXT]
+        # Diff mode: apply the SAME directory exclusions as a full walk so
+        # semgrep never flags code-pattern noise in test/vendored dirs on --diff
+        # that it would skip on a full scan (gitleaks still sees these files, so
+        # secrets in test code stay covered).
+        excluded = _SKIP_DIRS | _TEST_DIRS
+        troot = target.resolve()
+        out: list[str] = []
+        for p in paths:
+            if Path(p).suffix not in _SRC_EXT:
+                continue
+            try:
+                rel_parts = Path(p).resolve().relative_to(troot).parts
+            except ValueError:
+                rel_parts = Path(p).parts
+            if any(part in excluded for part in rel_parts[:-1]):
+                continue
+            out.append(p)
+        return out
     files: list[str] = []
     import os
     for root, dirs, names in os.walk(target):
@@ -214,7 +235,9 @@ def run_semgrep(target: Path, rules: Path, paths: list[str] | None,
             "file": _rel(r.get("path", ""), target),
             "line": r.get("start", {}).get("line", 0),
             "title": meta.get("clearmap_title", r.get("extra", {}).get("message", "")),
-            "structural_snippet": redact(snippet.strip()),
+            # Truncate AFTER redaction: cutting first would strip a value's
+            # closing quote and leak the prefix through the redactor.
+            "structural_snippet": redact(snippet.strip())[:SNIPPET_CHARS],
             "why": r.get("extra", {}).get("message", "").strip(),
             "remediation": meta.get("remediation", ""),
         })
@@ -222,11 +245,18 @@ def run_semgrep(target: Path, rules: Path, paths: list[str] | None,
                                     exit_code=last_rc, files=files, mode=mode)
 
 
+# Display length of a redacted snippet; the caller truncates to this AFTER
+# redaction (never before, or a cut could leak a value prefix).
+SNIPPET_CHARS = 300
+
+
 def _source_lines(path: str, start: int, end: int,
-                  cache: dict[str, list[str]], max_chars: int = 300) -> str:
+                  cache: dict[str, list[str]], max_chars: int = 4000) -> str:
     """Read the matched line range from the source file. Semgrep's own
     `extra.lines` field is login-gated ("requires login"), so the snippet is
-    extracted here and redacted by the caller."""
+    extracted here and redacted by the caller. `max_chars` is a generous read
+    bound (redaction runs on the full snippet; the caller trims to SNIPPET_CHARS
+    afterwards)."""
     if not path or start < 1:
         return ""
     if path not in cache:
@@ -415,6 +445,11 @@ def main() -> int:
     args = ap.parse_args()
 
     target = args.target.resolve()
+    # Fail closed on a bad target: scanning nothing must never look like a clean
+    # scan. Error out before writing any findings.json.
+    if not target.is_dir():
+        print(f"clearmap: target is not a directory: {target}", file=sys.stderr)
+        return 2
     paths = _changed_files(target) if args.diff else None
     mode = "diff" if paths is not None else "full"
     if args.diff and not paths:
@@ -497,6 +532,7 @@ def main() -> int:
         "suppressions": ledger,
         "findings": findings,
     }
+    args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, indent=2) + "\n")
     by_cat: dict[str, int] = {}
     for f in findings:

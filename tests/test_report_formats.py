@@ -68,6 +68,24 @@ class TestReportFormats(unittest.TestCase):
         self.assertNotIn("no source code or PHI left", remote)
         self.assertIn("sent the reviewed files", remote)
 
+    def test_out_parent_directories_are_created(self):
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td, "findings.json")
+            src.write_text(json.dumps(
+                {"findings": [det()], "source_layer": "deterministic+reasoning",
+                 "scan_ok": True}))
+            nested = Path(td, "deep", "nested", "report.md")
+            proc = subprocess.run(
+                [sys.executable, str(REPO / "scripts" / "report.py"), str(src),
+                 "--repo", "r", "--date", "2026-01-01", "--format", "both",
+                 "--out", str(nested)],
+                capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertTrue(nested.exists())
+            self.assertTrue(nested.with_suffix(".html").exists())
+
     def test_unavailable_json_has_null_score(self):
         m = report.build_model(
             {"findings": [det()], "source_layer": "deterministic", "scan_ok": False,

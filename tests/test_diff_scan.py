@@ -25,6 +25,23 @@ def _init_repo(root: Path):
     _git(root, "config", "user.name", "t")
 
 
+class TestSemgrepDiffTargets(unittest.TestCase):
+    def test_diff_excludes_test_and_vendored_dirs(self):
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td)
+            paths = [str(target / "src" / "app.py"),
+                     str(target / "tests" / "test_app.py"),
+                     str(target / "pkg" / "__tests__" / "x.ts"),
+                     str(target / "node_modules" / "dep" / "d.js"),
+                     str(target / "spec" / "e.rb"),
+                     str(target / "notes.md")]  # non-source suffix
+            out = scan._semgrep_targets(target, paths)
+            self.assertIn(str(target / "src" / "app.py"), out)
+            for excluded in ("tests", "__tests__", "node_modules", "spec", "notes.md"):
+                self.assertFalse(any(excluded in p for p in out),
+                                 f"{excluded} should be excluded in diff mode")
+
+
 class TestChangedFiles(unittest.TestCase):
     def test_tricky_filenames_not_dropped(self):
         with tempfile.TemporaryDirectory() as td:

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import html
 import json
 import re
 import subprocess
@@ -133,9 +134,9 @@ def _sanitize_remote(url: str) -> str:
 def _git(repo_path: Path, *args: str) -> str:
     try:
         out = subprocess.run(["git", "-C", str(repo_path), *args],
-                             capture_output=True, text=True, check=False)
+                             capture_output=True, text=True, check=False, timeout=30)
         return out.stdout.strip() if out.returncode == 0 else ""
-    except (OSError, ValueError):
+    except (OSError, ValueError, subprocess.SubprocessError):
         return ""
 
 
@@ -671,7 +672,11 @@ def render_md(m: dict) -> str:
                f"**Regulatory baseline:** {baseline.get('version','?')} "
                f"(as of {baseline.get('as_of','?')})\n")
     if m.get("provenance_rows"):
-        out.append("  \n".join(f"**{label}:** {val}"
+        # Provenance values (commit subject, committer, branch, remote) are
+        # untrusted repo text. Neutralize raw HTML (angle brackets, ampersands)
+        # so a crafted commit message cannot inject markup when the markdown is
+        # later rendered to HTML. The HTML emitter escapes via _e() already.
+        out.append("  \n".join(f"**{label}:** {html.escape(str(val), quote=False)}"
                                for label, val in m["provenance_rows"]) + "\n")
     out.append("> **Technical risk signal, not a certification.** This report is not a HIPAA "
                "compliance certification and does not mean the product is or is not HIPAA compliant.\n")
@@ -947,6 +952,7 @@ def main() -> int:
             return 1
 
     for path, text in outputs:
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text + "\n")
 
     s = model["scores"]

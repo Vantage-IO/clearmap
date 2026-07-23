@@ -157,6 +157,14 @@ def _e(v) -> str:
     return html.escape(str(v), quote=True)
 
 
+def _safe_href(url) -> str:
+    """Only https URLs are emitted as href values. Anything else (javascript:,
+    data:, http:, a relative or malformed value that a poisoned finding might
+    smuggle in) is dropped, so no anchor can carry an unsafe scheme."""
+    u = str(url or "").strip()
+    return u if u.lower().startswith("https://") else ""
+
+
 def _bold(md_text: str) -> str:
     """Escape, then honor the model's **bold** markers."""
     return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", _e(md_text))
@@ -188,8 +196,9 @@ def _score_color(score: int) -> str:
 
 def _citation_html(cit: dict) -> str:
     text = _e(cit["text"])
-    if cit["url"]:
-        return f'<a href="{_e(cit["url"])}">{text}</a>'
+    href = _safe_href(cit["url"])
+    if href:
+        return f'<a href="{_e(href)}">{text}</a>'
     return text
 
 
@@ -395,9 +404,10 @@ def render_html(m: dict) -> str:
         parts.append("<table><thead><tr><th>Citation</th><th>Requirement</th>"
                      "<th>Status</th><th>Source</th></tr></thead><tbody>")
         for c in m["citations"]:
-            if c["url"]:
-                shown = re.sub(r"^https?://", "", c["url"])
-                src = f'<a href="{_e(c["url"])}">{_e(shown)}</a>'
+            href = _safe_href(c["url"])
+            if href:
+                shown = re.sub(r"^https?://", "", href)
+                src = f'<a href="{_e(href)}">{_e(shown)}</a>'
             else:
                 src = ""
             parts.append(f"<tr><td>{_e(c['display'])}</td><td>{_e(c['title'])}</td>"
@@ -474,8 +484,10 @@ def render_html(m: dict) -> str:
     # Appendix B: about + disclaimer + closing note
     parts.append('<h2><span class="secno">B</span>Appendix B: About this report</h2>')
     parts.append(f'<footer class="disclaimer">{_bold(m["disclaimer"])}</footer>')
-    cta = _e(m["cta"]).replace(
-        "vantageio.com", f'<a href="{_e(m["cta_url"])}">vantageio.com</a>')
+    cta = _e(m["cta"])
+    cta_href = _safe_href(m["cta_url"])
+    if cta_href:
+        cta = cta.replace("vantageio.com", f'<a href="{_e(cta_href)}">vantageio.com</a>')
     parts.append(f'<div class="cta">{cta}</div>')
 
     parts.append("</div></body></html>")

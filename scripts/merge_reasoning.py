@@ -103,13 +103,21 @@ def main() -> int:
 
     det = json.loads(args.deterministic.read_text())
     rea = json.loads(args.reasoning.read_text())
-    rfindings = rea.get("findings", rea if isinstance(rea, list) else [])
+    # A top-level JSON array is accepted: test the list case BEFORE calling .get,
+    # or a bare list raises AttributeError (list has no .get). A bare list carries
+    # no provider/model/manifest metadata, so those fields default.
+    if isinstance(rea, list):
+        rfindings, rea_meta = rea, {}
+    elif isinstance(rea, dict):
+        rfindings, rea_meta = rea.get("findings", []), rea
+    else:
+        rfindings, rea_meta = [], {}
     repo_root = args.repo_path.resolve() if args.repo_path else None
 
-    provider = rea.get("provider", "host-agent")
-    model = rea.get("model")
-    run_id = rea.get("run_id")
-    manifest = rea.get("manifest") or {}
+    provider = rea_meta.get("provider", "host-agent")
+    model = rea_meta.get("model")
+    run_id = rea_meta.get("run_id")
+    manifest = rea_meta.get("manifest") or {}
 
     errors: list[str] = []
     cleaned = []

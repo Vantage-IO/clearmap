@@ -128,6 +128,7 @@ def main() -> int:
     data = json.loads(args.findings.read_text())
     out = args.out or args.findings.with_suffix(
         ".sarif" if args.format == "sarif" else ".csv")
+    out.parent.mkdir(parents=True, exist_ok=True)
     if args.format == "sarif":
         out.write_text(json.dumps(to_sarif(data), indent=2) + "\n")
     else:

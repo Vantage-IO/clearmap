@@ -145,6 +145,36 @@ class FailClosedCase(unittest.TestCase):
         self.assertEqual(data["engine_status"]["gitleaks"]["status"], "success")
         self.assertTrue(any(f["category"] == "SECRETS" for f in data["findings"]))
 
+    def test_nonexistent_target_fails_without_writing(self):
+        # A bad target must not look like a clean scan: nonzero exit, no output.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        out = root / "findings.json"
+        proc = subprocess.run(
+            [PY, str(SCAN), str(root / "no-such-dir"), "--out", str(out)],
+            capture_output=True, text=True)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse(out.exists(), "no findings.json for an unscannable target")
+        self.assertIn("not a directory", proc.stderr)
+
+    def test_out_parent_directories_are_created(self):
+        rc, data = self.run_scan()  # baseline sanity
+        self.assertEqual(rc, 0)
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        target = root / "repo"
+        target.mkdir()
+        (target / "a.py").write_text("x = 1\n")
+        nested = root / "deep" / "nested" / "findings.json"
+        proc = subprocess.run(
+            [PY, str(SCAN), str(target), "--out", str(nested)],
+            capture_output=True, text=True)
+        # Engines may be absent in CI's isolated env; either way the parent dir
+        # for --out must have been created and the file written.
+        self.assertTrue(nested.exists(), proc.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

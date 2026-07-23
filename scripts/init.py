@@ -113,15 +113,30 @@ def uninstall(target: Path, force: bool) -> int:
         return 1
     manifest = json.loads(manifest_path.read_text())
     entries = manifest.get("files", [])
-    # Verify first, delete second — uninstall is all-or-nothing.
+    troot = target.resolve()
+    # Path safety FIRST: the manifest is data from the target repo and is
+    # untrusted. An absolute path (pathlib join replaces target entirely) or one
+    # that escapes target via '..' must abort the WHOLE uninstall before anything
+    # is deleted. --force only skips the sha check; it never bypasses this guard.
+    resolved: list[tuple[dict, Path]] = []
     for e in entries:
-        path = target / e["path"]
+        rel = str(e.get("path", ""))
+        candidate = (target / rel).resolve()
+        safe = (rel and not Path(rel).is_absolute()
+                and candidate != troot and candidate.is_relative_to(troot))
+        if not safe:
+            print(f"clearmap: refusing to uninstall: manifest entry {rel!r} "
+                  "resolves outside the target directory (hostile manifest?)",
+                  file=sys.stderr)
+            return 2
+        resolved.append((e, candidate))
+    # Verify shas second, delete third — uninstall is all-or-nothing.
+    for e, path in resolved:
         if path.exists() and _sha(path) != e["sha256"] and not force:
             print(f"clearmap: {e['path']} was modified after install; "
                   "use --force to remove anyway", file=sys.stderr)
             return 1
-    for e in entries:
-        path = target / e["path"]
+    for e, path in resolved:
         if path.exists():
             path.unlink()
             print(f"  - {e['path']}")

@@ -30,7 +30,13 @@ def _key_loc(f: dict) -> tuple:
 
 def _findings(path: Path, source: str | None) -> list[dict]:
     data = json.loads(path.read_text())
-    items = data.get("findings", data.get("must_catch", data if isinstance(data, list) else []))
+    # Accept a top-level array: test the list case BEFORE calling .get (a bare
+    # list has no .get). Otherwise prefer "findings", then the "must_catch"
+    # fallback used by the expected-findings manifests.
+    if isinstance(data, list):
+        items = data
+    else:
+        items = data.get("findings", data.get("must_catch", []))
     if source and source != "all":
         out = []
         for f in items:

@@ -29,9 +29,18 @@ class TestIssues(unittest.TestCase):
 
     def test_severity_filter(self):
         proc = run(str(GOLDEN), "--severity", "low")
-        self.assertEqual(proc.returncode, 0)  # no critical/high in the list
+        # The view is filtered to low, but the exit-1 gate reflects the WHOLE
+        # finding set: criticals exist, so the gate still trips (was the bug).
+        self.assertEqual(proc.returncode, 1)
         self.assertIn("JWT", proc.stdout)
         self.assertNotIn("Database connection string", proc.stdout)
+
+    def test_gate_independent_of_severity_filter(self):
+        # Same critical-tripping gate regardless of which severities are shown.
+        for flt in (["--severity", "low"], ["--severity", "medium,low"],
+                    ["--severity", "critical"]):
+            proc = run(str(GOLDEN), *flt)
+            self.assertEqual(proc.returncode, 1, f"filter {flt}")
 
     def test_json_format(self):
         proc = run(str(GOLDEN), "--format", "json")

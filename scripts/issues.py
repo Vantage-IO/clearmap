@@ -116,7 +116,12 @@ def main() -> int:
     else:
         print(_fmt_table(rows, model["scores"]))
 
-    return 1 if any(r["severity"] in ("critical", "high") for r in rows) else 0
+    # The exit-1 gate reflects the WHOLE open-finding set, never the --severity
+    # display filter: a critical/high open finding must trip the gate even when
+    # the view hides it. Uses the scored counts (unfiltered, acknowledged risks
+    # excluded, consistent with the score).
+    s = model["scores"]
+    return 1 if (s["n_critical"] or s["n_high"]) else 0
 
 
 if __name__ == "__main__":

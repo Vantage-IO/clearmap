@@ -135,6 +135,21 @@ class TestPathAndIgnoreRules(FilterCase):
         self.assertEqual(kept[0]["severity"], "low")
         self.assertIn("test-fixture path", kept[0]["title"])
 
+    def test_presidio_phi_literal_in_test_path_not_downgraded(self):
+        # A real-looking patient record in a fixture stays HIGH and keeps its PHI
+        # wording; it must not be downgraded to low as a "credential".
+        self.write("tests/fixtures/seed.py", 'patient = {"name": "Jane Doe"}')
+        finding = _f(file="tests/fixtures/seed.py", rule_id="presidio-phi-literal",
+                     engine="presidio", severity="high",
+                     title="Possible raw PHI literal (PERSON) in a seed/fixture/template file")
+        kept = self.kept([finding])
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0]["severity"], "high")
+        self.assertNotIn("credential", kept[0]["title"])
+        self.assertNotIn("test-fixture path", kept[0]["title"])
+        # and it is not recorded as a downgrade in the ledger
+        self.assertEqual(self.ledger([finding]), [])
+
 
 if __name__ == "__main__":
     unittest.main()

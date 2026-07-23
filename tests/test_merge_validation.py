@@ -93,6 +93,16 @@ class MergeCase(unittest.TestCase):
         self.assertEqual(f["hipaa_ref"], "164.312(d)")
         self.assertEqual(f["authority_type"], "hipaa-required")
 
+    def test_top_level_list_reasoning_accepted(self):
+        # A bare JSON array (legacy shape, no wrapping object) must merge, not
+        # crash with AttributeError on .get.
+        rc, data, err = self.merge([valid()])
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(len(data["findings"]), 1)
+        self.assertEqual(data["findings"][0]["id"], "AUTH-01")
+        # No wrapping object => no manifest => stays incomplete, never crashes.
+        self.assertEqual(data["source_layer"], "deterministic")
+
     # --- completion gating ----------------------------------------------------
     def test_empty_no_manifest_stays_incomplete(self):
         rc, data, _ = self.merge({"findings": []})

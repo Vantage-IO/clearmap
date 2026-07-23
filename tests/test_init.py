@@ -75,6 +75,42 @@ class TestInit(unittest.TestCase):
         rels = {e["path"] for e in manifest["files"]}
         self.assertEqual(rels, {".claude/skills/clearmap/SKILL.md", ".clearmapignore"})
 
+    def _poison_manifest(self, entry_path: str) -> None:
+        """Rewrite the install manifest so its only entry points at entry_path."""
+        _run("install", str(self.target))
+        manifest_path = self.target / ".clearmap" / "install-manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["files"] = [{"path": entry_path, "sha256": "0" * 64}]
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+
+    def test_uninstall_rejects_traversal_entry_leaves_victim(self):
+        victim = self.target.parent / "victim.txt"
+        victim.write_text("do not delete me\n")
+        self.addCleanup(lambda: victim.exists() and victim.unlink())
+        rel = f"../{victim.name}"
+        for force in ([], ["--force"]):
+            with self.subTest(force=bool(force)):
+                self._poison_manifest(rel)
+                proc = _run("uninstall", str(self.target), *force)
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn("outside the target directory", proc.stderr)
+                self.assertTrue(victim.exists(), "traversal entry deleted a file outside target")
+                self.assertEqual(victim.read_text(), "do not delete me\n")
+
+    def test_uninstall_rejects_absolute_entry_leaves_victim(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as fh:
+            fh.write("absolute victim\n")
+            victim = Path(fh.name)
+        self.addCleanup(lambda: victim.exists() and victim.unlink())
+        for force in ([], ["--force"]):
+            with self.subTest(force=bool(force)):
+                self._poison_manifest(str(victim))
+                proc = _run("uninstall", str(self.target), *force)
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn("outside the target directory", proc.stderr)
+                self.assertTrue(victim.exists(), "absolute entry deleted a file outside target")
+                self.assertEqual(victim.read_text(), "absolute victim\n")
+
 
 if __name__ == "__main__":
     unittest.main()
