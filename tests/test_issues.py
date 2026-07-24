@@ -2,6 +2,7 @@
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -54,7 +55,6 @@ class TestIssues(unittest.TestCase):
         self.assertIn("Run an audit first", proc.stderr)
 
     def test_discovers_clearmap_dir(self):
-        import tempfile
         with tempfile.TemporaryDirectory() as td:
             d = Path(td, ".clearmap")
             d.mkdir()
@@ -62,6 +62,45 @@ class TestIssues(unittest.TestCase):
             proc = run(cwd=td)
             self.assertEqual(proc.returncode, 1)
             self.assertIn("7 open finding(s)", proc.stdout)
+
+    def test_agrees_with_report_on_acknowledged(self):
+        # issues must load acknowledgments and evaluate expiry the same way the
+        # report does, so score, acknowledged status, and the gate never disagree.
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td)
+            cm = repo / ".clearmap"
+            cm.mkdir()
+            findings = {
+                "findings": [{
+                    "category": "SECRETS", "severity": "critical", "source": "deterministic",
+                    "engine": "semgrep", "rule_id": "R-CRIT", "file": "config.py", "line": 9,
+                    "title": "Embedded credentials", "hipaa_ref": "164.312(a)(2)(i)",
+                    "structural_snippet": "", "why": "w"}],
+                "source_layer": "deterministic+reasoning",
+                "reasoning": {"provider": "host-agent", "complete": True}}
+            (cm / "findings.json").write_text(json.dumps(findings))
+            (repo / "clearmap-acknowledgments.json").write_text(json.dumps({"acknowledgments": [
+                {"reference": "R-CRIT", "owner": "sam@example.com", "date": "2026-01-01",
+                 "reason": "Injected from the secret manager at deploy time, not committed."}]}))
+
+            # issues: acknowledged critical does not trip the gate, shows Acknowledged.
+            iss = run(cwd=str(repo))  # discovers .clearmap/findings.json
+            self.assertEqual(iss.returncode, 0, iss.stderr + iss.stdout)
+            self.assertIn("Acknowledged", iss.stdout)
+            iss_json = json.loads(run(str(cm / "findings.json"), "--format", "json").stdout)
+
+            # report json for the same findings + acks.
+            rep = subprocess.run(
+                [sys.executable, str(REPO / "scripts" / "report.py"), str(cm / "findings.json"),
+                 "--repo-path", str(repo), "--format", "json", "--out", str(cm / "r.md")],
+                capture_output=True, text=True)
+            self.assertEqual(rep.returncode, 0, rep.stderr)
+            rep_json = json.loads((cm / "r.json").read_text())
+
+            self.assertEqual(iss_json["score"], rep_json["score"])   # agree on score
+            self.assertEqual(rep_json["score"], 95)                  # acknowledged critical
+            self.assertEqual(rep_json["acknowledged_count"], 1)
+            self.assertEqual(iss_json["findings"][0]["status"], "Acknowledged")
 
 
 if __name__ == "__main__":

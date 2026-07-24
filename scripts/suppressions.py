@@ -52,8 +52,21 @@ def main() -> int:
         else:
             print(f"clearmap: no findings file at {args.findings}", file=sys.stderr)
             return 2
-    data = json.loads(path.read_text())
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"clearmap: could not read {path} ({e}); not a valid findings file.",
+              file=sys.stderr)
+        return 2
+    if not isinstance(data, dict):
+        print(f"clearmap: {path} is not a valid findings file "
+              "(expected a JSON object, not a top-level array).", file=sys.stderr)
+        return 2
     ledger = data.get("suppressions", [])
+    if not isinstance(ledger, list):
+        print(f"clearmap: {path} has a malformed 'suppressions' field (expected a list).",
+              file=sys.stderr)
+        return 2
     as_of = args.as_of or date.today().isoformat()
     groups = classify(ledger, as_of)
 

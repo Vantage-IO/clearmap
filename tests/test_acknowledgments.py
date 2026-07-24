@@ -70,6 +70,14 @@ class TestLoad(unittest.TestCase):
         acks = A.load(_write([{"reference": "X"}, _ack(reference="AUDIT-01")]))
         self.assertEqual([a["reference"] for a in acks], ["AUDIT-01"])
 
+    def test_owner_is_redacted(self):
+        # Owner is free text that reaches the report; PHI pasted into it (e.g. an
+        # SSN) must be redacted just like the reason field.
+        acks = A.load(_write([_ack(owner="Owner 123-45-6789")]))
+        self.assertEqual(len(acks), 1)
+        self.assertNotIn("123-45-6789", acks[0]["owner"])
+        self.assertIn("[SSN]", acks[0]["owner"])
+
 
 class TestMatchAndApply(unittest.TestCase):
     def test_matches_by_reference(self):

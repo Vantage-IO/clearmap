@@ -74,9 +74,14 @@ def main() -> int:
     target = args.target.resolve()
     out_dir = target / ".clearmap"
     out_dir.mkdir(parents=True, exist_ok=True)
-    gi = target / ".gitignore"
-    if gi.exists() and ".clearmap/" not in gi.read_text():
-        gi.write_text(gi.read_text().rstrip("\n") + "\n.clearmap/\n")
+    # Keep the output directory out of the scanned repo's git history WITHOUT writing
+    # anywhere outside .clearmap/. SECURITY.md guarantees ClearMap never writes into
+    # the scanned repository except the .clearmap/ output directory, so we self-ignore
+    # from inside it: a .gitignore of "*" here makes git treat the whole directory as
+    # ignored, and the scanned repo's own .gitignore is left untouched.
+    self_ignore = out_dir / ".gitignore"
+    if not self_ignore.exists():
+        self_ignore.write_text("*\n")
     cfg = config.load(target, overrides={"provider": args.provider} if args.provider else None)
     provider = cfg["provider"]
 

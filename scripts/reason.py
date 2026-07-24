@@ -38,8 +38,16 @@ def _refs_dir() -> Path:
                HERE.parent / "references")
 
 
-def _candidates(target: Path) -> list[Path]:
+MAX_FILE_SIZE = 200_000
+
+
+def _candidates(target: Path) -> tuple[list[Path], list[Path]]:
+    """Return (files, oversized). `oversized` are applicable source files skipped
+    only because they exceed MAX_FILE_SIZE; they are recorded in the completion
+    manifest so an unreviewed large file cannot masquerade as a complete review.
+    Files unreadable for other reasons are dropped and not counted as reviewed."""
     files: list[Path] = []
+    oversized: list[Path] = []
     for root, dirs, names in os.walk(target):
         dirs[:] = sorted(d for d in dirs if d not in scanmod._SKIP_DIRS and not d.startswith("."))
         for n in sorted(names):
@@ -47,7 +55,8 @@ def _candidates(target: Path) -> list[Path]:
                     and "expected-findings" not in n:
                 p = Path(root) / n
                 try:
-                    if p.stat().st_size > 200_000:
+                    if p.stat().st_size > MAX_FILE_SIZE:
+                        oversized.append(p)
                         continue
                 except OSError:
                     continue
@@ -60,7 +69,7 @@ def _candidates(target: Path) -> list[Path]:
             return 0
         return sum(1 for rx in scanmod._SIG.values() if rx.search(t))
 
-    return sorted(files, key=lambda p: -signal(p))
+    return sorted(files, key=lambda p: -signal(p)), sorted(oversized)
 
 
 def _batches(files: list[Path], target: Path, budget: int = 40_000):
@@ -118,9 +127,14 @@ def main() -> int:
         except (OSError, json.JSONDecodeError):
             pass
 
-    all_batches = list(_batches(_candidates(target), target))
+    candidates, oversized = _candidates(target)
+    oversized_rel = [scanmod._rel(str(p), target) for p in oversized]
+    all_batches = list(_batches(candidates, target))
     process = all_batches[:args.max_batches]
-    skipped = [rel for b in all_batches[args.max_batches:] for rel, _ in b]
+    # Files not reviewed: those in batches beyond --max-batches, plus files skipped
+    # for exceeding the size limit. Both must be recorded so merge_reasoning marks
+    # the layer incomplete rather than claiming a false Complete.
+    skipped = [rel for b in all_batches[args.max_batches:] for rel, _ in b] + oversized_rel
     files_considered = sum(len(b) for b in process)
 
     findings: list[dict] = []
@@ -152,6 +166,7 @@ def main() -> int:
         "checks_in_scope": reasoning_ids,
         "files_considered": files_considered,
         "files_skipped": skipped,
+        "size_skipped": oversized_rel,
         "batches_completed": done,
         "batches_failed": failed,
         "truncated": truncated,

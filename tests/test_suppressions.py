@@ -55,6 +55,25 @@ class TestSuppressionsCommand(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
         self.assertIn("no suppressions", proc.stdout)
 
+    def _run_raw(self, text, *args):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td, "f.json")
+            p.write_text(text)
+            return subprocess.run([sys.executable, str(SUPP), str(p), *args],
+                                  capture_output=True, text=True)
+
+    def test_top_level_array_is_clean_error(self):
+        proc = self._run_raw("[1, 2, 3]")
+        self.assertEqual(proc.returncode, 2)
+        self.assertNotIn("Traceback", proc.stderr)
+        self.assertIn("not a valid findings file", proc.stderr)
+
+    def test_corrupt_json_is_clean_error(self):
+        proc = self._run_raw("{bad json")
+        self.assertEqual(proc.returncode, 2)
+        self.assertNotIn("Traceback", proc.stderr)
+        self.assertIn("could not read", proc.stderr)
+
 
 class TestSuppressionAppendix(unittest.TestCase):
     def test_appendix_renders_when_present(self):

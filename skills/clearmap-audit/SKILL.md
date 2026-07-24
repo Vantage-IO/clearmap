@@ -12,7 +12,7 @@ Resolve the engine root, call it `ROOT`, in this order: `$CLEARMAP_PLUGIN_ROOT`,
 ## Steps
 
 1. **Target.** Use the path the user gave, else the current project. Call it `TARGET`.
-2. **Output dir.** `mkdir -p "$TARGET/.clearmap"`. If `$TARGET/.gitignore` does not list `.clearmap/`, append it and say so.
+2. **Output dir.** `mkdir -p "$TARGET/.clearmap"`. Keep it out of git by writing a self-ignore inside the output directory: if `$TARGET/.clearmap/.gitignore` is absent, create it containing a single `*`. Never modify the scanned repo's own `.gitignore`; ClearMap writes only inside `.clearmap/`.
 3. **Doctor + engines.** Run `python3 "$ROOT/scripts/init.py" doctor "$TARGET"`. If a required engine (Semgrep, Gitleaks) is missing or the wrong version, relay the install hints and stop; do not fabricate a score.
 4. **Deterministic scan.**
    ```bash
@@ -53,7 +53,7 @@ Resolve the engine root, call it `ROOT`, in this order: `$CLEARMAP_PLUGIN_ROOT`,
      --repo "<repo name>" --repo-path "$TARGET" --format both \
      --out "$TARGET/.clearmap/clearmap-report.md"
    ```
-8. **Summarize inline** (see below), then suggest the next step: `clearmap-audit` to list open findings, or fixing the critical/high findings.
+8. **Summarize inline** (see below), then suggest the next step: `/clearmap:issues` to list open findings, or fixing the critical/high findings.
 
 ## Inline summary (always show this)
 

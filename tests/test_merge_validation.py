@@ -53,8 +53,16 @@ class MergeCase(unittest.TestCase):
     def test_unknown_check_id(self):
         self.assert_rejected({"findings": [valid(id="NOPE-99")]}, "unknown check id")
 
-    def test_noncanonical_severity(self):
-        self.assert_rejected({"findings": [valid(severity="low")]}, "!= canonical")
+    def test_raise_without_reason_rejected(self):
+        # Reasoning may raise severity above canonical only with an explicit reason.
+        # TRANSIT-04 is canonically low; raising it to critical needs a reason.
+        self.assert_rejected(
+            {"findings": [valid(id="TRANSIT-04", category="TRANSIT", severity="critical")]},
+            "above canonical")
+
+    def test_unknown_field_rejected(self):
+        # additionalProperties: false — an injected/junk key is rejected outright.
+        self.assert_rejected({"findings": [valid(injected_note="pwn")]}, "unrecognized field")
 
     def test_absolute_path(self):
         self.assert_rejected({"findings": [valid(file="/etc/passwd")]}, "repo-relative")
@@ -73,11 +81,41 @@ class MergeCase(unittest.TestCase):
         self.assert_rejected({"findings": [valid(line=99)]}, "past end", make_repo=True)
 
     # --- acceptances + transforms --------------------------------------------
-    def test_severity_override_accepted(self):
+    def test_severity_raise_with_reason_accepted(self):
+        # A raise above canonical (low -> critical) is allowed with a reason and kept.
         rc, data, err = self.merge(
-            {"findings": [valid(severity="low", severity_override_reason="context-specific")]})
+            {"findings": [valid(id="TRANSIT-04", category="TRANSIT", severity="critical",
+                                severity_override_reason="exposed to the public internet")]})
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(data["findings"]), 1)
+        self.assertEqual(data["findings"][0]["severity"], "critical")
+
+    def test_downgrade_is_clamped_not_accepted(self):
+        # Untrusted reasoning must NEVER lower a canonical critical (AUTH-01) below
+        # its baseline; the severity is clamped back up whether or not a reason is
+        # given, so a self-downgrade cannot dodge the critical ceiling.
+        for extra in ({}, {"severity_override_reason": "because"}):
+            rc, data, err = self.merge({"findings": [valid(severity="low", **extra)]})
+            self.assertEqual(rc, 0, err)
+            self.assertEqual(data["findings"][0]["severity"], "critical")
+
+    def test_injected_acknowledged_field_is_stripped(self):
+        # A hostile reasoning finding carrying an `acknowledged` control field must
+        # still merge and score as a LIVE critical (not excluded), and must not
+        # render as acknowledged.
+        rc, data, err = self.merge({"findings": [valid(
+            acknowledged={"owner": "attacker", "date": "2026-01-01", "reason": "self-acked"})]})
+        self.assertEqual(rc, 0, err)
+        f = data["findings"][0]
+        self.assertNotIn("acknowledged", f)
+        self.assertNotIn("acknowledgment_expired", f)
+        self.assertEqual(f["severity"], "critical")
+
+    def test_injected_acknowledgment_expired_field_is_stripped(self):
+        rc, data, err = self.merge({"findings": [valid(
+            acknowledgment_expired={"owner": "x", "date": "d", "expires": "2020-01-01"})]})
+        self.assertEqual(rc, 0, err)
+        self.assertNotIn("acknowledgment_expired", data["findings"][0])
 
     def test_title_is_redacted(self):
         rc, data, _ = self.merge(
@@ -138,6 +176,15 @@ class MergeCase(unittest.TestCase):
             {"findings": [], "manifest": {"batches_failed": 0, "files_skipped": ["b.py"]}})
         self.assertEqual(rc, 0)
         self.assertFalse(data["reasoning"]["complete"])
+
+    def test_zero_files_considered_stays_incomplete(self):
+        # An empty pass (nothing reviewed) is never a complete assessment.
+        rc, data, _ = self.merge(
+            {"findings": [], "manifest": {"batches_failed": 0, "truncated": False,
+                                          "files_skipped": [], "files_considered": 0}})
+        self.assertEqual(rc, 0)
+        self.assertFalse(data["reasoning"]["complete"])
+        self.assertIn("no files", data["reasoning"]["incomplete_reason"])
 
     def test_fingerprint_match_marks_complete(self):
         det = {"findings": [], "source_layer": "deterministic",

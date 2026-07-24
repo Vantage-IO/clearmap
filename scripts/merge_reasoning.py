@@ -31,8 +31,34 @@ import taxonomy  # noqa: E402
 
 VALID_SEVERITY = {"critical", "high", "medium", "low"}
 VALID_CONFIDENCE = {"high", "medium", "low"}
+_SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 REQUIRED = ["id", "category", "severity", "source", "confidence", "file", "line",
             "title", "structural_snippet", "why"]
+
+# Scoring-control fields are authoritative only when written by the trusted
+# acknowledgments layer (acknowledgments.apply), never from untrusted reasoning
+# output. If a reasoning finding carries one, it is stripped before the finding
+# enters the merged set, so a self-acknowledged critical cannot dodge the score.
+# Acknowledgments come ONLY from the acknowledgments file.
+CONTROL_FIELDS = ("acknowledged", "acknowledgment_expired")
+
+# The complete set of keys a reasoning finding may carry. category, hipaa_ref,
+# authority_type, and engine are taken from the registry/provider at merge time;
+# an agent may still send them and they are overwritten. Any other key is junk or
+# an injection attempt and is rejected (mirrors additionalProperties: false in
+# references/reasoning-schema.json). Control fields are stripped, not rejected.
+ALLOWED_KEYS = {
+    "id", "category", "severity", "source", "confidence", "file", "line",
+    "title", "structural_snippet", "why",
+    "remediation", "reviewer_question", "severity_override_reason",
+    "hipaa_ref", "authority_type", "engine",
+}
+
+
+def _sev_rank(sev) -> int:
+    """Severity ordering: higher rank is more severe. Unknown severities rank
+    below every valid one, so an unknown value clamps up to canonical."""
+    return _SEVERITY_RANK.get(sev, -1)
 
 
 def validate(f: dict, i: int, repo_root: Path | None = None) -> list[str]:
@@ -41,6 +67,14 @@ def validate(f: dict, i: int, repo_root: Path | None = None) -> list[str]:
     ids, non-canonical severities (unless explicitly overridden), category drift,
     unsafe/traversal file paths, PHI-like paths, and out-of-range line numbers."""
     errs = []
+    if not isinstance(f, dict):
+        return [f"finding[{i}] must be an object, got {type(f).__name__}"]
+    # Reject unknown/injected keys (schema additionalProperties: false). Control
+    # fields are not "unknown": they are stripped at merge time, not rejected, so
+    # a finding that merely carries one still scores as a live finding.
+    unknown = sorted(set(f) - ALLOWED_KEYS - set(CONTROL_FIELDS))
+    if unknown:
+        errs.append(f"finding[{i}] has unrecognized field(s): {', '.join(unknown)}")
     for k in REQUIRED:
         if k not in f or f[k] in (None, ""):
             errs.append(f"finding[{i}] missing required field: {k}")
@@ -61,9 +95,15 @@ def validate(f: dict, i: int, repo_root: Path | None = None) -> list[str]:
         if f.get("category") != reg["category"]:
             errs.append(f"finding[{i}] {fid} category {f.get('category')!r} "
                         f"!= canonical {reg['category']!r}")
-        if f.get("severity") != reg["severity"] and not f.get("severity_override_reason"):
-            errs.append(f"finding[{i}] {fid} severity {f.get('severity')!r} != canonical "
-                        f"{reg['severity']!r} (set severity_override_reason to override)")
+        # Severity policy: reasoning may RAISE severity above the canonical value
+        # (erring toward caution) only with an explicit reason. It may NEVER LOWER
+        # it: an untrusted downgrade cannot dodge the critical ceiling, so a lower
+        # severity is clamped back up to canonical at merge time (see main) rather
+        # than accepted. A downgrade is therefore not an error here.
+        if (_sev_rank(f.get("severity")) > _sev_rank(reg["severity"])
+                and not f.get("severity_override_reason")):
+            errs.append(f"finding[{i}] {fid} severity {f.get('severity')!r} is above canonical "
+                        f"{reg['severity']!r}; set severity_override_reason to raise it")
 
     # File path safety: relative, no traversal, no PHI/secret-like content.
     raw = str(f.get("file", ""))
@@ -120,9 +160,19 @@ def main() -> int:
     manifest = rea_meta.get("manifest") or {}
 
     errors: list[str] = []
+    stripped_control = 0
     cleaned = []
     for i, f in enumerate(rfindings):
         errors.extend(validate(f, i, repo_root))
+        if not isinstance(f, dict):
+            continue
+        # Strip scoring-control fields: acknowledgments are authoritative only from
+        # the trusted acknowledgments file, never from reasoning output. A finding
+        # that carried one still merges and scores as a live finding.
+        for k in CONTROL_FIELDS:
+            if k in f:
+                del f[k]
+                stripped_control += 1
         # Redaction safety net on ALL user-visible free text, including the title
         # (rendered prominently, never redacted before). The file path is validated
         # above (rejected if PHI/secret-like), not rewritten.
@@ -135,6 +185,9 @@ def main() -> int:
             f["category"] = reg["category"]
             f["hipaa_ref"] = reg["hipaa_ref"]
             f["authority_type"] = reg["authority_type"]
+            # Never let untrusted reasoning LOWER severity below the canonical value.
+            if _sev_rank(f.get("severity")) < _sev_rank(reg["severity"]):
+                f["severity"] = reg["severity"]
         f.setdefault("source", "reasoning")
         f.setdefault("engine", provider)
         cleaned.append(f)
@@ -144,6 +197,11 @@ def main() -> int:
         for e in errors:
             print("  -", e, file=sys.stderr)
         return 1
+
+    if stripped_control:
+        print(f"clearmap: stripped {stripped_control} scoring-control field(s) from "
+              "reasoning findings (acknowledgments come only from the acknowledgments "
+              "file, never from reasoning output)", file=sys.stderr)
 
     # Overlap dedupe: when the deterministic layer already flagged the same flaw
     # (same category + file, nearby line — det route rules anchor on the
@@ -189,6 +247,11 @@ def main() -> int:
         if manifest.get("truncated") or manifest.get("files_skipped"):
             n = len(manifest.get("files_skipped") or [])
             incomplete_reasons.append(f"review truncated ({n} file(s) not reviewed)")
+        # A manifest that reports zero files considered reviewed nothing; that is an
+        # empty pass, never a complete assessment (checked only when the manifest
+        # reports the count, so a legacy manifest without it is unaffected).
+        if "files_considered" in manifest and int(manifest.get("files_considered") or 0) == 0:
+            incomplete_reasons.append("no files were reviewed")
         if det_fp and manifest.get("scan_fingerprint") != det_fp:
             incomplete_reasons.append("manifest does not match this scan revision")
     reasoning_complete = not incomplete_reasons

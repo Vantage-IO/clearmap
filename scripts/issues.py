@@ -15,6 +15,7 @@ Exit code 1 when any critical or high finding is open (usable as a gate).
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import sys
 from pathlib import Path
@@ -46,6 +47,7 @@ def _rows(model: dict, severities: set[str] | None) -> list[dict]:
             "location": v["location"],
             "citation": v["citation"]["short"] if v["citation"] else "",
             "status": v["verification_short"],
+            "acknowledged": bool(v.get("acknowledged")),
         })
     return rows
 
@@ -104,7 +106,15 @@ def main() -> int:
             return 2
 
     data = json.loads(Path(path).read_text())
-    model = report.build_model(data, repo=str(path), date="")
+    # Load acknowledgments and evaluate expiry against today, exactly as the report
+    # and audit do, so this list can never disagree with the report on score or on
+    # which findings are acknowledged. The acknowledgments file lives at the repo
+    # root; when findings come from `<repo>/.clearmap/`, that root is two levels up.
+    fpath = Path(path).resolve()
+    ack_root = fpath.parent.parent if fpath.parent.name == ".clearmap" else fpath.parent
+    acks = report.ack_mod.load(ack_root)
+    today = datetime.date.today().isoformat()
+    model = report.build_model(data, repo=str(path), date=today, acknowledgments=acks)
     rows = _rows(model, severities)
 
     if args.format == "json":

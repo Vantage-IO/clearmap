@@ -16,6 +16,7 @@
         "checks_in_scope": {"type": "array", "items": {"type": "string"}, "description": "Reasoning check ids reviewed against"},
         "files_considered": {"type": "integer", "minimum": 0},
         "files_skipped": {"type": "array", "description": "Applicable files NOT reviewed; must be empty for Complete"},
+        "size_skipped": {"type": "array", "description": "Applicable files skipped only because they exceed the size limit; a subset of files_skipped"},
         "batches_completed": {"type": "integer", "minimum": 0},
         "batches_failed": {"type": "integer", "minimum": 0},
         "truncated": {"type": "boolean", "description": "True if the review did not cover the whole codebase"},
@@ -26,6 +27,7 @@
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["id", "category", "severity", "source", "confidence", "file",
                      "line", "title", "structural_snippet", "why"],
         "properties": {
@@ -41,7 +43,10 @@
           "why": {"type": "string"},
           "remediation": {"type": "string"},
           "reviewer_question": {"type": "string"},
-          "severity_override_reason": {"type": "string", "description": "Required to deviate from the canonical severity"}
+          "severity_override_reason": {"type": "string", "description": "Required to RAISE severity above the canonical value; a lower severity is clamped up to canonical at merge time"},
+          "hipaa_ref": {"type": "string", "description": "Ignored; taken from taxonomy.json at merge time"},
+          "authority_type": {"type": "string", "description": "Ignored; taken from taxonomy.json at merge time"},
+          "engine": {"type": "string", "description": "Ignored; set to the provider at merge time"}
         }
       }
     }

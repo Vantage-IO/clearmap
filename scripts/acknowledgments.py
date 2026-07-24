@@ -132,9 +132,10 @@ def load(target: Path) -> list[dict]:
             "reference": str(e["reference"]).strip(),
             "file": str(e["file"]).strip() if e.get("file") else None,
             # Owner is an accountability identifier (who accepted the risk), like a
-            # git commit author, so it is shown verbatim. The reason is free text and
-            # is redacted as a safety net against pasted PHI or secrets.
-            "owner": str(e["owner"]).strip(),
+            # git commit author. It is still run through redact() as a safety net:
+            # both owner and reason are free text that reaches the report, so PHI or
+            # a secret pasted into either must never appear in output.
+            "owner": redact(str(e["owner"]).strip()),
             "date": str(e["date"]).strip(),
             "expires": str(e["expires"]).strip() if e.get("expires") else None,
             "reason": redact(str(e["reason"]).strip()),

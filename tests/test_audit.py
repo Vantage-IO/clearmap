@@ -92,5 +92,30 @@ class TestAudit(unittest.TestCase):
         self.assertIn("different scan revision", proc.stderr)
 
 
+class TestReadOnlyGuarantee(unittest.TestCase):
+    """SECURITY.md: ClearMap writes only inside .clearmap/. It must not modify the
+    scanned repo's own .gitignore. It self-ignores from inside the output directory
+    instead. This holds with or without the engines installed, because the
+    self-ignore is written before any scanning happens (so no engine gate here)."""
+
+    def test_self_ignore_never_touches_the_scanned_repo_gitignore(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        target = Path(tmp.name) / "app"
+        target.mkdir()
+        (target / ".gitignore").write_text("node_modules/\n")
+        env = dict(os.environ, XDG_CONFIG_HOME=str(Path(tmp.name) / "cfg"))
+        for k in ("CLEARMAP_REASONING_PROVIDER", "CLEARMAP_MODEL_BASE_URL"):
+            env.pop(k, None)
+        subprocess.run([sys.executable, str(AUDIT), str(target), "--format", "md",
+                        "--skip-reasoning"], capture_output=True, text=True, env=env)
+        # The scanned repo's own .gitignore is untouched.
+        self.assertEqual((target / ".gitignore").read_text(), "node_modules/\n")
+        # A self-ignore was written INSIDE the output directory instead.
+        self_ignore = target / ".clearmap" / ".gitignore"
+        self.assertTrue(self_ignore.is_file())
+        self.assertEqual(self_ignore.read_text(), "*\n")
+
+
 if __name__ == "__main__":
     unittest.main()

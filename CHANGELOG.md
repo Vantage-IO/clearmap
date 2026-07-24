@@ -65,7 +65,8 @@ Plugin-first release: ClearMap becomes an installable agent-native plugin
 - Reasoning findings are validated against the registry and redacted more
   strictly (including titles and file paths), and require provider provenance and
   a completion manifest before an assessment counts as complete.
-- README is plugin-first; standalone scanner usage moves to `docs/standalone-cli.md`.
+- README is plugin-first; standalone scanner usage moves to the "Standalone CLI"
+  section of `docs/advanced.md`.
   SECURITY.md documents the pluggable, local-by-default provider model.
 
 ## [0.1.0]
