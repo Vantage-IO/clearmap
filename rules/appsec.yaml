@@ -22,13 +22,16 @@ rules:
       hipaa_ref: CWE-89
       remediation: Use parameterized queries / bound parameters; never interpolate values into SQL.
     patterns:
+      # f-string patterns REQUIRE an interpolation ({$V}); a constant f-string
+      # like execute(f"SELECT * FROM patients") builds no dynamic SQL and must
+      # not fire (it was a false critical that capped the score).
       - pattern-either:
-          - pattern: $X.execute(f"...", ...)
-          - pattern: $X.executemany(f"...", ...)
+          - pattern: $X.execute(f"...{$V}...", ...)
+          - pattern: $X.executemany(f"...{$V}...", ...)
           - pattern: $X.execute($A + $B, ...)
           - pattern: $X.execute($A % $B, ...)
           - pattern: $X.execute("...".format(...), ...)
-          - pattern: text(f"...")
+          - pattern: text(f"...{$V}...")
 
   - id: appsec-command-injection-python
     languages: [python]
@@ -44,13 +47,22 @@ rules:
       hipaa_ref: CWE-78
       remediation: Use subprocess with an argument list and shell=False; never build shell strings from input.
     patterns:
+      # As with the SQL rule, f-strings REQUIRE an interpolation ({$V}); a
+      # constant command string is not injectable. Dynamic strings are matched
+      # via f-string interpolation, concatenation, %, and .format() alike.
       - pattern-either:
-          - pattern: os.system(f"...")
+          - pattern: os.system(f"...{$V}...")
           - pattern: os.system($A + $B)
-          - pattern: os.popen(f"...")
+          - pattern: os.system($A % $B)
+          - pattern: os.system("...".format(...))
+          - pattern: os.popen(f"...{$V}...")
           - pattern: os.popen($A + $B)
-          - pattern: subprocess.$M(f"...", ..., shell=True, ...)
+          - pattern: os.popen($A % $B)
+          - pattern: os.popen("...".format(...))
+          - pattern: subprocess.$M(f"...{$V}...", ..., shell=True, ...)
           - pattern: subprocess.$M($A + $B, ..., shell=True, ...)
+          - pattern: subprocess.$M($A % $B, ..., shell=True, ...)
+          - pattern: subprocess.$M("...".format(...), ..., shell=True, ...)
 
   - id: appsec-ssrf-request-url-python
     languages: [python]
@@ -136,4 +148,46 @@ rules:
       - pattern-either:
           - pattern: $APP.add_middleware(CORSMiddleware, ..., allow_origins=["*"], ..., allow_credentials=True, ...)
           - pattern: $APP.add_middleware(CORSMiddleware, ..., allow_credentials=True, ..., allow_origins=["*"], ...)
+          # Wildcard bound through a variable evades the literal-only match:
+          #   origins = ["*"]; add_middleware(..., allow_origins=origins, ...)
+          - patterns:
+              - pattern-either:
+                  - pattern: |
+                      $O = ["*"]
+                      ...
+                      $APP.add_middleware(CORSMiddleware, ..., allow_origins=$O, ..., allow_credentials=True, ...)
+                  - pattern: |
+                      $O = ["*"]
+                      ...
+                      $APP.add_middleware(CORSMiddleware, ..., allow_credentials=True, ..., allow_origins=$O, ...)
           - pattern: $APP.run(..., debug=True, ...)
+
+  - id: appsec-phi-in-logs
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A full request headers map (which carries Authorization and Cookie) or a
+      raw request/response body is written to the logs. On a PHI service this
+      spills credentials and patient data into broadly-readable, long-lived log
+      sinks. Log only non-sensitive metadata (method, path, status, a correlation
+      id); never the full headers or body.
+    metadata:
+      clearmap_category: APPSEC
+      clearmap_severity: high
+      clearmap_title: Sensitive request data written to logs
+      hipaa_ref: CWE-532
+      remediation: Log only non-sensitive metadata; redact/omit Authorization, Cookie, and request/response bodies.
+    patterns:
+      - pattern-either:
+          - pattern: $LOG.$M(..., $REQ.headers, ...)
+          - pattern: $LOG.$M(..., dict($REQ.headers), ...)
+          - pattern: $LOG.$M(..., $REQ.body(), ...)
+          - pattern: $LOG.$M(..., await $REQ.body(), ...)
+      # $LOG is a logger (logger / logging / self.logger), not e.g. catalog.
+      - metavariable-regex:
+          metavariable: $LOG
+          regex: (?i).*\b(log|logger|logging)$
+      # The source is the request object, not an already-narrowed value.
+      - metavariable-regex:
+          metavariable: $REQ
+          regex: (?i)^(request|req)$

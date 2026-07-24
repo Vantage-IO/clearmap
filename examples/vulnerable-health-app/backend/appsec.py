@@ -1,6 +1,7 @@
 # APPSEC demo: general application-security weaknesses in a PHI service.
 # NOT runnable production code. Each function seeds exactly one canonical
 # APPSEC finding for the corpus.
+import logging
 import os
 import pickle
 
@@ -8,6 +9,13 @@ import requests
 from fastapi.middleware.cors import CORSMiddleware
 
 DOCS_ROOT = "/srv/patient-docs"
+logger = logging.getLogger("clinic.appsec")
+
+
+def log_request(request):
+    # APPSEC-07: the full request headers (which carry Authorization) and the raw
+    # request body are written to the logs, spilling credentials and PHI.
+    logger.info("incoming request headers=%s body=%s", dict(request.headers), request.body())
 
 
 def find_patient(cur, name):

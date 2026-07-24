@@ -8,8 +8,13 @@
 #   - Express apps with app.use(auth) global middleware — see the caveat in the
 #     express rule message (capped at HIGH for exactly that reason).
 #
-# PHI route lexicon shared by the route rules:
+# PHI route lexicon shared by the route rules (clinical-record + clinical-workflow
+# + app-domain nouns; matched against the route PATH only, so broadening it stays
+# precise). "case" is word-boundary-anchored so it never matches showcase/usecase.
 #   patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg
+#   |conversation|message|scribe|intake|survey|assessment|member|eligibility
+#   |prescription|vital|symptom|condition|appointment|referral|immuniz|imaging
+#   |claim|insurance|case
 
 rules:
   - id: access-fastapi-unauthenticated-phi-read
@@ -30,10 +35,19 @@ rules:
           @$R.get($PATH)
           def $FN(...):
               ...
-      - pattern-not: |
-          @$R.get($PATH)
-          def $FN(..., $U=Depends(...), ...):
-              ...
+      # Only an AUTH dependency counts as a guard. A route whose only Depends is a
+      # non-auth provider (get_db, get_session, get_settings, pagination, ...) is
+      # still unauthenticated, so the Depends callable must match the auth lexicon
+      # for the route to be suppressed.
+      - pattern-not:
+          patterns:
+            - pattern: |
+                @$R.get($PATH)
+                def $FN(..., $U=Depends($DEP), ...):
+                    ...
+            - metavariable-regex:
+                metavariable: $DEP
+                regex: (?i).*(auth|current_user|user|token|principal|login|require|verify|jwt|identity|permission|authoriz|authenticat|credential|api_?key|bearer|oauth|role|scope|whoami|viewer|actor|caller)
       - pattern-not: |
           @$R.get($PATH, dependencies=$DEPS)
           def $FN(...):
@@ -41,7 +55,7 @@ rules:
       - metavariable-pattern:
           metavariable: $PATH
           patterns:
-            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg)
+            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg|conversation|message|scribe|intake|survey|assessment|member|eligibility|prescription|vital|symptom|condition|appointment|referral|immuniz|imaging|claim|insurance|\bcase)
 
   - id: access-fastapi-unauthenticated-phi-mutation
     languages: [python]
@@ -64,10 +78,17 @@ rules:
       - metavariable-regex:
           metavariable: $METHOD
           regex: ^(post|put|patch|delete)$
-      - pattern-not: |
-          @$R.$METHOD($PATH)
-          def $FN(..., $U=Depends(...), ...):
-              ...
+      # Only an AUTH dependency counts as a guard (see the read rule): a non-auth
+      # provider such as Depends(get_db) does not authenticate the mutation.
+      - pattern-not:
+          patterns:
+            - pattern: |
+                @$R.$METHOD($PATH)
+                def $FN(..., $U=Depends($DEP), ...):
+                    ...
+            - metavariable-regex:
+                metavariable: $DEP
+                regex: (?i).*(auth|current_user|user|token|principal|login|require|verify|jwt|identity|permission|authoriz|authenticat|credential|api_?key|bearer|oauth|role|scope|whoami|viewer|actor|caller)
       - pattern-not: |
           @$R.$METHOD($PATH, dependencies=$DEPS)
           def $FN(...):
@@ -75,7 +96,7 @@ rules:
       - metavariable-pattern:
           metavariable: $PATH
           patterns:
-            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg)
+            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg|conversation|message|scribe|intake|survey|assessment|member|eligibility|prescription|vital|symptom|condition|appointment|referral|immuniz|imaging|claim|insurance|\bcase)
 
   - id: access-flask-unauthenticated-phi-route
     languages: [python]
@@ -109,7 +130,7 @@ rules:
       - metavariable-pattern:
           metavariable: $PATH
           patterns:
-            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg)
+            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg|conversation|message|scribe|intake|survey|assessment|member|eligibility|prescription|vital|symptom|condition|appointment|referral|immuniz|imaging|claim|insurance|\bcase)
 
   - id: access-express-unauthenticated-phi-route
     languages: [javascript, typescript]
@@ -137,7 +158,7 @@ rules:
       - metavariable-pattern:
           metavariable: $PATH
           patterns:
-            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg)
+            - pattern-regex: (?i)(patient|record|chart|mrn|note|lab|medication|diagnos|encounter|observation|allerg|conversation|message|scribe|intake|survey|assessment|member|eligibility|prescription|vital|symptom|condition|appointment|referral|immuniz|imaging|claim|insurance|\bcase)
 
   - id: access-auth-disabled-flag
     languages: [python, javascript, typescript]
@@ -198,3 +219,104 @@ rules:
       - metavariable-regex:
           metavariable: $JWT
           regex: ^(jwt|jsonwebtoken)$
+
+  - id: access-graphql-strawberry-idor
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A Strawberry GraphQL resolver takes an object id but never reads
+      info.context (the authenticated request) and never calls an ownership or
+      authorization helper, so any caller may be able to read or mutate another
+      patient's record by id (object-level authorization / IDOR). HIGH, not
+      critical: authorization may live in a middleware or a permission class.
+      Verify this resolver checks the caller and confirms they own the requested
+      object, or suppress with `# clearmap:allow access-graphql-strawberry-idor`.
+    metadata:
+      clearmap_category: ACCESS
+      clearmap_severity: high
+      clearmap_title: GraphQL resolver without object-level authorization
+      hipaa_ref: 164.312(a)(1)
+      remediation: Read the authenticated principal from info.context and verify ownership of the requested object before returning it.
+    patterns:
+      - pattern-either:
+          - pattern: |
+              @strawberry.field
+              def $FN(...):
+                  ...
+          - pattern: |
+              @strawberry.field
+              async def $FN(...):
+                  ...
+          - pattern: |
+              @strawberry.field(...)
+              def $FN(...):
+                  ...
+          - pattern: |
+              @strawberry.field(...)
+              async def $FN(...):
+                  ...
+          - pattern: |
+              @strawberry.mutation
+              def $FN(...):
+                  ...
+          - pattern: |
+              @strawberry.mutation
+              async def $FN(...):
+                  ...
+          - pattern: |
+              @strawberry.mutation(...)
+              def $FN(...):
+                  ...
+          - pattern: |
+              @strawberry_django.field
+              def $FN(...):
+                  ...
+          - pattern: |
+              @strawberry_django.mutation
+              def $FN(...):
+                  ...
+      # The resolver addresses an object by an id-like parameter.
+      - pattern-either:
+          - pattern: |
+              def $FN(..., $ID: $T, ...):
+                  ...
+          - pattern: |
+              async def $FN(..., $ID: $T, ...):
+                  ...
+      - metavariable-regex:
+          metavariable: $ID
+          regex: (?i).*(id|uid|uuid|mrn)$
+      # Suppress when the resolver CAN authorize: it takes strawberry.Info, reads
+      # a .context, or calls an ownership/authorization helper.
+      - pattern-not: |
+          def $FN(..., $INFO: strawberry.Info, ...):
+              ...
+      - pattern-not: |
+          async def $FN(..., $INFO: strawberry.Info, ...):
+              ...
+      - pattern-not: |
+          def $FN(...):
+              ...
+              $C.context
+              ...
+      - pattern-not: |
+          async def $FN(...):
+              ...
+              $C.context
+              ...
+      - pattern-not:
+          patterns:
+            - pattern-either:
+                - pattern: |
+                    def $FN(...):
+                        ...
+                        $HELPER(...)
+                        ...
+                - pattern: |
+                    async def $FN(...):
+                        ...
+                        $HELPER(...)
+                        ...
+            - metavariable-regex:
+                metavariable: $HELPER
+                regex: (?i).*(authoriz|authenticat|require|verify|ownership|owns|can_edit|can_access|check_access|ensure_|assert_|guard|permission|current_user|get_current)

@@ -31,13 +31,17 @@
     "TRANSIT-04": {"category": "TRANSIT", "layer": "reasoning", "severity": "low", "authority_type": "hipaa-required", "hipaa_ref": "164.312(e)(1)"},
     "TRANSIT-05": {"category": "TRANSIT", "layer": "deterministic", "severity": "critical", "authority_type": "hipaa-required", "hipaa_ref": "164.312(e)(1)"},
     "TRANSIT-06": {"category": "TRANSIT", "layer": "deterministic", "severity": "critical", "authority_type": "hipaa-required", "hipaa_ref": "164.312(e)(1)"},
+    "TRANSIT-07": {"category": "TRANSIT", "layer": "deterministic", "severity": "high", "authority_type": "hipaa-required", "hipaa_ref": "164.312(e)(1)"},
     "SESSION-01": {"category": "SESSION", "layer": "deterministic", "severity": "high", "authority_type": "hipaa-addressable", "hipaa_ref": "164.312(a)(2)(iv)"},
     "SESSION-02": {"category": "SESSION", "layer": "deterministic", "severity": "high", "authority_type": "hipaa-addressable", "hipaa_ref": "164.312(a)(2)(iv)"},
     "SESSION-03": {"category": "SESSION", "layer": "deterministic", "severity": "medium", "authority_type": "hipaa-addressable", "hipaa_ref": "164.312(a)(2)(iv)"},
     "SESSION-04": {"category": "SESSION", "layer": "deterministic", "severity": "critical", "authority_type": "hipaa-addressable", "hipaa_ref": "164.312(a)(2)(iv)"},
+    "SESSION-05": {"category": "SESSION", "layer": "deterministic", "severity": "high", "authority_type": "hipaa-addressable", "hipaa_ref": "164.312(a)(2)(iv)"},
+    "SESSION-06": {"category": "SESSION", "layer": "deterministic", "severity": "high", "authority_type": "hipaa-addressable", "hipaa_ref": "164.312(a)(2)(iv)"},
     "TRACKING-01": {"category": "TRACKING", "layer": "deterministic", "severity": "high", "authority_type": "ocr-guidance", "hipaa_ref": "OCR online-tracking guidance"},
     "TRACKING-02": {"category": "TRACKING", "layer": "deterministic", "severity": "high", "authority_type": "ocr-guidance", "hipaa_ref": "OCR online-tracking guidance"},
     "TRACKING-03": {"category": "TRACKING", "layer": "deterministic", "severity": "medium", "authority_type": "ocr-guidance", "hipaa_ref": "OCR online-tracking guidance"},
+    "TRACKING-04": {"category": "TRACKING", "layer": "deterministic", "severity": "high", "authority_type": "ocr-guidance", "hipaa_ref": "OCR online-tracking guidance"},
     "AI-RAG-01": {"category": "AI-RAG", "layer": "reasoning", "severity": "critical", "authority_type": "onc-certification-criterion", "hipaa_ref": "ONC HTI-1 170.315(b)(11)"},
     "AI-RAG-02": {"category": "AI-RAG", "layer": "reasoning", "severity": "high", "authority_type": "onc-certification-criterion", "hipaa_ref": "ONC HTI-1 170.315(b)(11)"},
     "AI-RAG-03": {"category": "AI-RAG", "layer": "reasoning", "severity": "high", "authority_type": "onc-certification-criterion", "hipaa_ref": "ONC HTI-1 170.315(b)(11)"},
@@ -54,6 +58,7 @@
     "APPSEC-03": {"category": "APPSEC", "layer": "deterministic", "severity": "high", "authority_type": "security-best-practice", "hipaa_ref": "CWE-918"},
     "APPSEC-04": {"category": "APPSEC", "layer": "deterministic", "severity": "high", "authority_type": "security-best-practice", "hipaa_ref": "CWE-22"},
     "APPSEC-05": {"category": "APPSEC", "layer": "deterministic", "severity": "critical", "authority_type": "security-best-practice", "hipaa_ref": "CWE-502"},
-    "APPSEC-06": {"category": "APPSEC", "layer": "deterministic", "severity": "high", "authority_type": "security-best-practice", "hipaa_ref": "CWE-16"}
+    "APPSEC-06": {"category": "APPSEC", "layer": "deterministic", "severity": "high", "authority_type": "security-best-practice", "hipaa_ref": "CWE-16"},
+    "APPSEC-07": {"category": "APPSEC", "layer": "deterministic", "severity": "high", "authority_type": "security-best-practice", "hipaa_ref": "CWE-532"}
   }
 }

@@ -1,6 +1,7 @@
 # APPSEC safe counterparts: the same features implemented correctly. Every
 # function here is the must-not-flag twin of a vulnerable seed. NOT runnable.
 import json
+import logging
 import os
 import subprocess
 from urllib.parse import urlparse
@@ -10,6 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 DOCS_ROOT = "/srv/patient-docs"
 ALLOWED_HOSTS = {"cdn.example.org"}
+logger = logging.getLogger("clinic.appsec")
+
+
+def log_request(request):
+    # NEAR-MISS (APPSEC-07): logs only non-sensitive metadata, never the full
+    # headers or the request body.
+    logger.info("incoming %s %s", request.method, request.url.path)
 
 
 def find_patient(cur, name):
@@ -18,10 +26,23 @@ def find_patient(cur, name):
     return cur.fetchall()
 
 
+def count_patients(cur):
+    # NEAR-MISS: a constant f-string with no interpolation builds no dynamic SQL,
+    # so it must not fire the injection rule (this was a false critical).
+    cur.execute(f"SELECT count(*) FROM patients")
+    return cur.fetchone()
+
+
 def export_records(patient_id):
     # Argument list, no shell interpretation.
     subprocess.run(["tar", "czf", f"/backups/{patient_id}.tgz", f"/data/{patient_id}"],
                    shell=False, check=True)
+
+
+def rotate_backups():
+    # NEAR-MISS: a constant f-string command with no interpolation is not
+    # injectable and must not fire the command-injection rule.
+    os.system(f"find /backups -type f -mtime +30 -delete")
 
 
 def fetch_avatar(request):

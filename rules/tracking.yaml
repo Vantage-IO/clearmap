@@ -37,6 +37,34 @@ rules:
           - pattern: "analytics.page($NAME, { ..., patientId: $P, ... })"
           - pattern: 'analytics.page("PatientChart", ...)'
 
+  - id: tracking-session-replay-sdk
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      A session-replay / full-DOM-recording SDK is initialized. On a surface that
+      renders PHI it records the patient's screen (fields, notes, identifiers) and
+      ships it to a third party. Disable replay on PHI screens, mask all PHI, and
+      confirm a BAA before any recording. Needs verification.
+    metadata:
+      clearmap_category: TRACKING
+      clearmap_severity: high
+      clearmap_title: Session-replay SDK initialized in a PHI application
+      hipaa_ref: OCR online-tracking guidance
+      remediation: Disable session replay on PHI surfaces or mask all PHI; require a BAA and privacy review.
+    patterns:
+      # Datadog RUM only when replay / interaction capture is actually configured
+      # (a plain RUM init for error monitoring, with no replay, must not fire).
+      - pattern-either:
+          - pattern: 'datadogRum.init({..., sessionReplaySampleRate: $N, ...})'
+          - pattern: 'datadogRum.init({..., trackUserInteractions: true, ...})'
+          - pattern: LogRocket.init(...)
+          - pattern: FullStory.init(...)
+          - pattern: FullStory({...})
+          - pattern: hotjar.initialize(...)
+          - pattern: 'Sentry.init({..., replaysSessionSampleRate: $N, ...})'
+          - pattern: 'Sentry.init({..., replaysOnErrorSampleRate: $N, ...})'
+          - pattern: new $NS.Replay(...)
+
   - id: tracking-health-context-in-url
     languages: [typescript, javascript]
     severity: WARNING

@@ -73,7 +73,7 @@ jobs:
           python3 scripts/calibrate.py \
             --expected examples/vulnerable-health-app/expected-findings.json \
             --candidate /tmp/vuln.json --source deterministic \
-            --min-recall 0.94 --min-precision 1.0
+            --min-recall 0.96 --min-precision 1.0
       - name: Zero false positives on the safe fixture
         run: |
           python3 scripts/scan.py examples/safe-health-app --out /tmp/safe.json

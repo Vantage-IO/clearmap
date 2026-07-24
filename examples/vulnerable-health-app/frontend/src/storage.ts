@@ -30,3 +30,9 @@ export function rememberRecentMrn(patient: Patient): void {
   // readable by JavaScript and sent on every request to the origin.
   document.cookie = `recentMrn=${patient.mrn}; path=/`;
 }
+
+export function cacheAppState(patientChart: Patient): void {
+  // SESSION-06: PHI under a BENIGN key. The key ("appState") looks harmless, but
+  // the value serializes a PHI-named object, so the chart still lands in storage.
+  localStorage.setItem("appState", JSON.stringify(patientChart));
+}

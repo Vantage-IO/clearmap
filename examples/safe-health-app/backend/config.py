@@ -24,3 +24,8 @@ HEALTHCHECK_URL = "http://localhost:8080/healthz"
 # NEAR-MISS: a templated placeholder, not a real credential — the deploy
 # tooling substitutes the value. A naive secret rule keys on the assignment.
 SMTP_PASSWORD = "${SMTP_PASSWORD}"
+
+# NEAR-MISS: a sample DB connection string whose password is a ${...} template,
+# substituted at deploy time. A scheme-agnostic db-uri rule would flag it; the
+# placeholder-guarded rule must not (the password is not a real credential).
+SAMPLE_DB_URL = "postgresql://app:${DB_PASSWORD}@db.internal:5432/app"

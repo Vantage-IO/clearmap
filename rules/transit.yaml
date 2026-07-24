@@ -25,3 +25,28 @@ rules:
     patterns:
       - pattern-regex: >-
           (?:http|ws)://(?!localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|[A-Za-z0-9.-]*\.internal\b|[A-Za-z0-9.-]*\.svc\.cluster\.local|www\.w3\.org|schemas\.xmlsoap\.org|schema\.org|www\.schema\.org|xmlns\.com|purl\.org|ns\.adobe\.com|www\.apache\.org|xml\.apache\.org|maven\.apache\.org|schemas\.openxmlformats\.org|schemas\.microsoft\.com|schemas\.android\.com|json-schema\.org|specs\.openid\.net|www\.opengis\.net)[A-Za-z0-9.-]+
+
+  - id: transit-tls-verification-disabled
+    languages: [python]
+    severity: ERROR
+    message: >-
+      TLS certificate verification is turned off (verify=False, an unverified SSL
+      context, or CERT_NONE), so the connection is encrypted but unauthenticated
+      and trivially machine-in-the-middled. For ePHI on any network path this
+      defeats Transmission Security. Leave verification on and fix the underlying
+      certificate/trust issue instead.
+    metadata:
+      clearmap_category: TRANSIT
+      clearmap_severity: high
+      clearmap_title: TLS certificate verification disabled
+      hipaa_ref: 164.312(e)(1)
+      remediation: Never disable certificate verification; install the correct CA/trust chain and keep verify on.
+    patterns:
+      - pattern-either:
+          - pattern: requests.$M(..., verify=False, ...)
+          - pattern: httpx.$M(..., verify=False, ...)
+          - pattern: httpx.Client(..., verify=False, ...)
+          - pattern: httpx.AsyncClient(..., verify=False, ...)
+          - pattern: aiohttp.$M(..., ssl=False, ...)
+          - pattern: ssl._create_unverified_context(...)
+          - pattern: ssl.CERT_NONE

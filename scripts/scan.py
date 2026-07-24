@@ -66,7 +66,19 @@ EXCLUDE_BASENAMES = {
 ENGINE_PINS = {"semgrep": "1.164", "gitleaks": "8.30"}
 
 # Engine statuses that mean the engine ran and its results are trustworthy.
+# "partial" (some files/batches skipped on a timeout) is deliberately NOT here:
+# partial results are preserved and shown, but the scan stays not-ok / non-
+# scoreable — partial is never treated as clean.
 _HEALTHY = {"success"}
+
+# Semgrep robustness knobs. The per-file/per-rule timeout + threshold let the
+# engine skip one pathological file instead of hanging; the memory cap bounds a
+# runaway rule; smaller batches each carry their own wall-clock budget so one
+# slow batch degrades to partial results instead of zeroing the whole scan.
+SEMGREP_PER_FILE_TIMEOUT = 30    # --timeout: seconds a single rule may spend on one file
+SEMGREP_TIMEOUT_THRESHOLD = 3    # --timeout-threshold: rules that may time out before a file is skipped
+SEMGREP_MAX_MEMORY_MB = 5000     # --max-memory: cap per rule-file (MB)
+SEMGREP_BATCH = 300              # files per semgrep invocation (each gets its own budget)
 
 
 def _engine_version(cmd: list[str]) -> str | None:
@@ -153,12 +165,13 @@ def _semgrep_targets(target: Path, paths: list[str] | None) -> list[str]:
         # Diff mode: apply the SAME directory exclusions as a full walk so
         # semgrep never flags code-pattern noise in test/vendored dirs on --diff
         # that it would skip on a full scan (gitleaks still sees these files, so
-        # secrets in test code stay covered).
+        # secrets in test code stay covered). Generated lockfiles are skipped too,
+        # matching the full walk.
         excluded = _SKIP_DIRS | _TEST_DIRS
         troot = target.resolve()
         out: list[str] = []
         for p in paths:
-            if Path(p).suffix not in _SRC_EXT:
+            if Path(p).suffix not in _SRC_EXT or _is_generated_file(p):
                 continue
             try:
                 rel_parts = Path(p).resolve().relative_to(troot).parts
@@ -174,16 +187,31 @@ def _semgrep_targets(target: Path, paths: list[str] | None) -> list[str]:
         rel_root = Path(root)
         dirs[:] = sorted(d for d in dirs if d not in _SKIP_DIRS and d not in _TEST_DIRS)
         for n in sorted(names):
-            if Path(n).suffix in _SRC_EXT:
+            if Path(n).suffix in _SRC_EXT and not _is_generated_file(n):
                 files.append(str(rel_root / n))
     return files
 
 
+def _is_generated_file(path: str) -> bool:
+    """A generated lockfile that should never be pattern-scanned (large,
+    non-source). Covers the extensions that ARE in _SRC_EXT (e.g. pnpm-lock.yaml)
+    plus any *.lock file."""
+    name = Path(path).name
+    return name in _SKIP_FILE_BASENAMES or name.endswith(".lock")
+
+
 def run_semgrep(target: Path, rules: Path, paths: list[str] | None,
                 timeout: int = 300) -> tuple[list[dict], dict]:
-    """Run Semgrep and return (findings, engine_status). Fails closed: a missing
-    binary, an engine/config error, malformed JSON, or a timeout yields an empty
-    findings list and a non-'success' status so the caller can refuse to score."""
+    """Run Semgrep and return (findings, engine_status). Fails closed on a missing
+    binary, an engine/config error, or malformed JSON (empty findings + non-
+    'success' status so the caller can refuse to score).
+
+    A wall-clock timeout DEGRADES rather than zeroes: the offending batch is
+    skipped-and-recorded, every other batch's findings are preserved, and the
+    status is 'partial' (not 'success', so the scan is still marked not-ok /
+    non-scoreable — partial results are never presented as clean). The engine is
+    also handed its own per-file timeout + threshold and a memory cap so one slow
+    file is skipped inside the batch before the outer wall-clock is ever reached."""
     version = _engine_version(["semgrep", "--version"])
     mode = "diff" if paths is not None else "full"
     if not shutil.which("semgrep"):
@@ -194,17 +222,25 @@ def run_semgrep(target: Path, rules: Path, paths: list[str] | None,
         return [], _engine_status("semgrep", "success", version, exit_code=0, files=0, mode=mode)
     results: list[dict] = []
     last_rc = 0
-    BATCH = 1500  # keep argv well under ARG_MAX on large repos
-    for i in range(0, len(scan_paths), BATCH):
+    timed_out_batches = 0
+    base_argv = [
+        "semgrep", "--config", str(rules), "--json", "--quiet",
+        "--metrics", "off", "--disable-version-check",
+        "--timeout", str(SEMGREP_PER_FILE_TIMEOUT),
+        "--timeout-threshold", str(SEMGREP_TIMEOUT_THRESHOLD),
+        "--max-memory", str(SEMGREP_MAX_MEMORY_MB),
+    ]
+    for i in range(0, len(scan_paths), SEMGREP_BATCH):
+        batch = scan_paths[i:i + SEMGREP_BATCH]
         try:
             proc = subprocess.run(
-                ["semgrep", "--config", str(rules), "--json", "--quiet",
-                 "--metrics", "off", "--disable-version-check", *scan_paths[i:i + BATCH]],
+                [*base_argv, *batch],
                 capture_output=True, text=True, check=False, timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            return [], _engine_status("semgrep", "timeout", version, files=files,
-                                      mode=mode, reason=f"exceeded {timeout}s")
+            # Skip this batch, keep every other batch's findings, keep scanning.
+            timed_out_batches += 1
+            continue
         last_rc = proc.returncode
         if proc.returncode >= 2:  # semgrep: 0 = ok, 1 = findings, >=2 = error
             st = "config-invalid" if _looks_config_error(proc.stderr) else "error"
@@ -241,6 +277,11 @@ def run_semgrep(target: Path, rules: Path, paths: list[str] | None,
             "why": r.get("extra", {}).get("message", "").strip(),
             "remediation": meta.get("remediation", ""),
         })
+    if timed_out_batches:
+        return findings, _engine_status(
+            "semgrep", "partial", version, exit_code=last_rc, files=files, mode=mode,
+            reason=f"{timed_out_batches} batch(es) exceeded {timeout}s wall clock; "
+                   "results are partial and not scoreable")
     return findings, _engine_status("semgrep", "success", version,
                                     exit_code=last_rc, files=files, mode=mode)
 
@@ -367,8 +408,21 @@ def _rel(path: str, target: Path) -> str:
         return path
 
 
+# Directories that never hold first-party source: VCS, virtualenvs, build
+# output, and gitignored package/cache stores. gitleaks `dir` ignores .gitignore
+# and so walks e.g. a ~750MB pnpm content store full of extensionless hash
+# blobs; skipping these here keeps the semgrep target walk fast and deterministic
+# (mirror of rules/gitleaks.toml [allowlist] and filters.VENDORED_PATH_RES).
 _SKIP_DIRS = {".git", "node_modules", "venv", ".venv", "dist", "build",
-              ".next", "__pycache__", "htmlcov", ".trunk", ".clearmap"}
+              ".next", "__pycache__", "htmlcov", ".trunk", ".clearmap",
+              ".pnpm-store", ".yarn", ".turbo", ".cache", ".parcel-cache",
+              ".svelte-kit", ".nuxt", ".output", "coverage", ".vercel",
+              ".serverless"}
+# Generated lockfiles: large, non-source, and never worth pattern-scanning.
+# (package-lock.json is already excluded by extension; pnpm-lock.yaml is not,
+# and *.lock files carry .lock which is likewise not a source extension, so an
+# explicit basename/suffix skip is needed for the ones that slip through.)
+_SKIP_FILE_BASENAMES = {"pnpm-lock.yaml", "package-lock.json", "yarn.lock"}
 _SRC_EXT = {".py", ".ts", ".tsx", ".js", ".jsx", ".vue", ".svelte", ".rb", ".go",
             ".java", ".php", ".cs", ".env", ".toml", ".yaml", ".yml"}
 import re as _re  # noqa: E402
@@ -542,14 +596,18 @@ def main() -> int:
     for cat in sorted(by_cat):
         print(f"  {cat:10s} {by_cat[cat]}")
     if not scan_ok:
+        partial = False
         for e in required:
             st = engine_status[e]
             if st["status"] not in _HEALTHY:
+                partial = partial or st["status"] == "partial"
                 extra = f": {st['reason']}" if st.get("reason") else ""
-                print(f"clearmap: {e} did not complete ({st['status']}{extra})",
-                      file=sys.stderr)
-        print("clearmap: scan incomplete; results are not scoreable. "
-              "Run 'clearmap doctor <target>' to diagnose.", file=sys.stderr)
+                verb = "returned partial results" if st["status"] == "partial" else "did not complete"
+                print(f"clearmap: {e} {verb} ({st['status']}{extra})", file=sys.stderr)
+        note = ("partial results were kept but are not scoreable"
+                if partial else "scan incomplete; results are not scoreable")
+        print(f"clearmap: {note}. Run 'clearmap doctor <target>' to diagnose.",
+              file=sys.stderr)
         return 2
     return 0
 

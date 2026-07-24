@@ -33,6 +33,17 @@ def sync_patient_to_crm(patient: dict) -> None:
     )
 
 
+def fetch_pharmacy_data(patient_mrn: str) -> dict:
+    """Pull prescription data from the pharmacy partner over TLS.
+
+    TRANSIT-07: TLS certificate verification is disabled (verify=False) on a PHI
+    call. The transport is encrypted but unauthenticated, so a machine-in-the-
+    middle can present any certificate and read or alter the prescription data.
+    """
+    resp = requests.get(f"https://rx.partner-network.example/mrn/{patient_mrn}", verify=False)
+    return resp.json()
+
+
 def fetch_internal_record(patient_mrn: str) -> dict:
     """Fetch a chart from the internal records microservice (same VPC / cluster).
 

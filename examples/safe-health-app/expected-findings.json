@@ -30,6 +30,13 @@
       "why_clean": "Plain http:// but a localhost readiness probe carrying no PHI."
     },
     {
+      "relates_to": "TRANSIT-07",
+      "file": "backend/integrations.py",
+      "line": 10,
+      "structural_snippet": "resp = requests.get(f\"{LAB_PARTNER_URL}/results/{patient_mrn}\", timeout=10)",
+      "why_clean": "TLS verification is left at its secure default (not disabled); must not fire."
+    },
+    {
       "relates_to": "SESSION-01",
       "file": "frontend/src/storage.ts",
       "line": 18,
@@ -58,6 +65,13 @@
       "why_clean": "identify() passes only an opaque id + non-PHI plan tier."
     },
     {
+      "relates_to": "SESSION-06",
+      "file": "frontend/src/storage.ts",
+      "line": 35,
+      "structural_snippet": "localStorage.setItem(\"appState\", JSON.stringify(prefs));",
+      "why_clean": "Benign key + JSON.stringify of a NON-PHI object (UI prefs); must not fire."
+    },
+    {
       "relates_to": "TRACKING-02",
       "file": "frontend/src/analytics.ts",
       "line": 19,
@@ -79,11 +93,25 @@
       "why_clean": "Templated placeholder substituted at deploy time \u2014 not a real credential."
     },
     {
+      "relates_to": "ACCESS-01",
+      "file": "backend/config.py",
+      "line": 31,
+      "structural_snippet": "SAMPLE_DB_URL = \"postgresql://app:${DB_PASSWORD}@db.internal:5432/app\"",
+      "why_clean": "DB connection string whose password is a ${...} template, not a real credential."
+    },
+    {
       "relates_to": "SECRETS-02",
       "file": "frontend/src/observability.ts",
       "line": 12,
       "structural_snippet": "clientToken: \"puba1b2c3d4e5f60718293a4b5c6d7e8f\",",
       "why_clean": "Datadog RUM client token is publishable by design (ships in the browser bundle)."
+    },
+    {
+      "relates_to": "TRACKING-04",
+      "file": "frontend/src/observability.ts",
+      "line": 10,
+      "structural_snippet": "datadogRum.init({",
+      "why_clean": "RUM init for error monitoring with no session replay / interaction capture; must not fire."
     },
     {
       "relates_to": "SECRETS-02",
@@ -102,44 +130,65 @@
     {
       "relates_to": "APPSEC-01",
       "file": "backend/appsec.py",
-      "line": 17,
+      "line": 25,
       "structural_snippet": "cur.execute(\"SELECT * FROM patients WHERE name = ?\", (name,))",
       "why_clean": "Parameterized query; the value is bound, not interpolated."
     },
     {
+      "relates_to": "APPSEC-01",
+      "file": "backend/appsec.py",
+      "line": 32,
+      "structural_snippet": "cur.execute(f\"SELECT count(*) FROM patients\")",
+      "why_clean": "Constant f-string with no interpolation builds no dynamic SQL; must not fire."
+    },
+    {
       "relates_to": "APPSEC-02",
       "file": "backend/appsec.py",
-      "line": 23,
+      "line": 45,
+      "structural_snippet": "os.system(f\"find /backups -type f -mtime +30 -delete\")",
+      "why_clean": "Constant f-string command with no interpolation is not injectable."
+    },
+    {
+      "relates_to": "APPSEC-02",
+      "file": "backend/appsec.py",
+      "line": 38,
       "structural_snippet": "subprocess.run([\"tar\", \"czf\", f\"/backups/{patient_id}.tgz\", f\"/data/{patient_id}\"],",
       "why_clean": "Argument list with shell=False; no shell to inject into."
     },
     {
       "relates_to": "APPSEC-03",
       "file": "backend/appsec.py",
-      "line": 31,
+      "line": 52,
       "structural_snippet": "return requests.get(url)",
       "why_clean": "URL host is validated against an allowlist before the fetch."
     },
     {
       "relates_to": "APPSEC-04",
       "file": "backend/appsec.py",
-      "line": 38,
+      "line": 59,
       "structural_snippet": "with open(os.path.join(DOCS_ROOT, name)) as fh:",
       "why_clean": "basename strips traversal before the path is joined."
     },
     {
       "relates_to": "APPSEC-05",
       "file": "backend/appsec.py",
-      "line": 44,
+      "line": 65,
       "structural_snippet": "return json.loads(blob)",
       "why_clean": "json, not pickle; no code execution on load."
     },
     {
       "relates_to": "APPSEC-06",
       "file": "backend/appsec.py",
-      "line": 49,
+      "line": 70,
       "structural_snippet": "app.add_middleware(CORSMiddleware, allow_origins=[\"https://portal.example.org\"],",
       "why_clean": "Explicit trusted origin, not a wildcard."
+    },
+    {
+      "relates_to": "APPSEC-07",
+      "file": "backend/appsec.py",
+      "line": 20,
+      "structural_snippet": "logger.info(\"incoming %s %s\", request.method, request.url.path)",
+      "why_clean": "Logs only non-sensitive metadata (method + path), never the headers or body."
     }
   ]
 }

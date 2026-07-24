@@ -28,3 +28,9 @@ export function stashCsrfToken(patientToken: string): void {
 export function setSessionRef(ref: string): void {
   document.cookie = `sessionRef=${ref}; Secure; SameSite=Strict; path=/`;
 }
+
+// NEAR-MISS (SESSION-06): benign key + JSON.stringify of a NON-PHI object (UI
+// preferences). The value carries no PHI-named identifier, so it must not fire.
+export function cacheAppState(prefs: Record<string, unknown>): void {
+  localStorage.setItem("appState", JSON.stringify(prefs));
+}

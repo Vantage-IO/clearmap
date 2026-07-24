@@ -42,6 +42,7 @@ CATEGORIES = {
     "SECRETS":   ("Secrets / Config",          "45 CFR 164.312(a)(1)", "extension"),
     "APPSEC":    ("Application Security",       "OWASP / CWE application-security", "extension"),
 }
+# APPSEC-07 uses CWE-532 (sensitive data in logs); the anchor lives in appsec.py.
 
 # id, category code, title, severity, source, file (rel to fixture), anchor,
 # hipaa_ref (specific paragraph), why, remediation
@@ -126,6 +127,11 @@ SPEC = [
      "backend/config.py", 'CRM_WEBHOOK_URL = "http://', "164.312(e)(1)",
      "The CRM webhook used for patient sync is plain http://, so PHI pushed to it travels unencrypted.",
      "Use https:// and verify the receiving party is BAA-covered before sending PHI."),
+    ("TRANSIT-07", "TRANSIT", "TLS certificate verification disabled", "high", "deterministic",
+     "backend/integrations.py", 'https://rx.partner-network.example/mrn/', "164.312(e)(1)",
+     "A PHI call disables TLS certificate verification (verify=False), leaving the connection "
+     "encrypted but unauthenticated and open to a machine-in-the-middle.",
+     "Never disable certificate verification; install the correct CA/trust chain and keep verify on."),
     ("TRANSIT-04", "TRANSIT", "Internal cleartext PHI (low/advisory)", "low", "reasoning",
      "backend/integrations.py", 'http://records.internal.svc.cluster.local', "164.312(e)(1)",
      "Internal service-to-service PHI over http to a host inside a trusted boundary (private cluster "
@@ -152,6 +158,14 @@ SPEC = [
      "frontend/src/analytics.ts", 'analytics.identify(patient.id, {', "164.312(a)(2)(iv)",
      "Patient identity + diagnosis handed to the analytics vendor via identify().",
      "Never pass PHI to client analytics SDKs; identify by opaque non-PHI id only."),
+    ("SESSION-05", "SESSION", "PHI passed to a third-party user-identification method", "high", "deterministic",
+     "frontend/src/observability.ts", 'analytics.setUser({ name: patient.name', "164.312(a)(2)(iv)",
+     "Patient name, MRN, and DOB passed to a third-party setUser call.",
+     "Use an opaque non-PHI id; never pass name/MRN/DOB/SSN/diagnosis to a client SDK."),
+    ("SESSION-06", "SESSION", "PHI serialized to web storage under a benign key", "high", "deterministic",
+     "frontend/src/storage.ts", 'localStorage.setItem("appState", JSON.stringify(patientChart))', "164.312(a)(2)(iv)",
+     "The storage key looks harmless but the value serializes a PHI-named object into localStorage.",
+     "Keep PHI server-side; hold transient state in memory cleared on logout."),
 
     # --- TRACKING — OCR online-tracking guidance (extension) ---
     ("TRACKING-01", "TRACKING", "Analytics firing inside authenticated patient view", "high", "deterministic",
@@ -166,6 +180,10 @@ SPEC = [
      "frontend/src/PatientView.tsx", 'const shareLink =', "OCR online-tracking guidance",
      "Condition + MRN placed in a URL query string, leaking into history, logs, and Referer headers.",
      "Reference records by opaque id; never put health context in URLs."),
+    ("TRACKING-04", "TRACKING", "Session-replay SDK initialized in a PHI application", "high", "deterministic",
+     "frontend/src/observability.ts", 'datadogRum.init({', "OCR online-tracking guidance",
+     "A session-replay SDK records the full patient screen and ships it to a third-party vendor.",
+     "Disable session replay on PHI surfaces or mask all PHI; require a BAA and privacy review."),
 
     # --- AI-RAG — ONC HTI-1 170.315(b)(11) (extension) — the differentiator ---
     ("AI-RAG-01", "AI-RAG", "Unredacted PHI interpolated into LLM prompt", "critical", "reasoning",
@@ -240,6 +258,10 @@ SPEC = [
      "backend/appsec.py", 'allow_origins=["*"], allow_credentials=True', "CWE-16",
      "Wildcard CORS combined with credentials lets any origin read authenticated responses.",
      "List explicit trusted origins; never combine wildcard origin with credentials."),
+    ("APPSEC-07", "APPSEC", "Sensitive request data written to logs", "high", "deterministic",
+     "backend/appsec.py", 'logger.info("incoming request headers=%s', "CWE-532",
+     "Full request headers (Authorization) and the raw body are written to the logs, spilling credentials and PHI.",
+     "Log only non-sensitive metadata; redact/omit Authorization, Cookie, and request/response bodies."),
 ]
 
 
@@ -266,6 +288,8 @@ NEAR_MISSES = [
      "Secret-shaped name but sourced from the environment / secret manager."),
     ("TRANSIT-01", "backend/config.py", 'HEALTHCHECK_URL = "http://localhost',
      "Plain http:// but a localhost readiness probe carrying no PHI."),
+    ("TRANSIT-07", "backend/integrations.py", 'resp = requests.get(f"{LAB_PARTNER_URL}/results/',
+     "TLS verification is left at its secure default (not disabled); must not fire."),
     ("SESSION-01", "frontend/src/storage.ts", 'localStorage.setItem("ui.theme"',
      "localStorage used only for a non-PHI UI preference."),
     ("SESSION-02", "frontend/src/storage.ts", 'sessionStorage.setItem("csrf"',
@@ -274,6 +298,8 @@ NEAR_MISSES = [
      "Cookie holds an opaque, Secure session ref — no PHI."),
     ("SESSION-04", "frontend/src/analytics.ts", 'analytics.identify(patient.id, { plan',
      "identify() passes only an opaque id + non-PHI plan tier."),
+    ("SESSION-06", "frontend/src/storage.ts", 'localStorage.setItem("appState", JSON.stringify(prefs))',
+     "Benign key + JSON.stringify of a NON-PHI object (UI prefs); must not fire."),
     ("TRACKING-02", "frontend/src/analytics.ts", 'analytics.track("chart_opened"',
      "Analytics event carries only a non-PHI interaction signal."),
     # Real-world false-positive classes: must stay silent forever.
@@ -281,8 +307,12 @@ NEAR_MISSES = [
      "SVG xmlns is a constant XML namespace identifier, not a network endpoint."),
     ("SECRETS-01", "backend/config.py", 'SMTP_PASSWORD = "${SMTP_PASSWORD}"',
      "Templated placeholder substituted at deploy time — not a real credential."),
+    ("ACCESS-01", "backend/config.py", 'SAMPLE_DB_URL = "postgresql://app:',
+     "DB connection string whose password is a ${...} template, not a real credential."),
     ("SECRETS-02", "frontend/src/observability.ts", 'clientToken: "pub',
      "Datadog RUM client token is publishable by design (ships in the browser bundle)."),
+    ("TRACKING-04", "frontend/src/observability.ts", 'datadogRum.init({',
+     "RUM init for error monitoring with no session replay / interaction capture; must not fire."),
     ("SECRETS-02", "frontend/src/observability.ts", 'snippet.js?key=',
      "Support-widget embed URL with a public key= UUID served to every visitor."),
     ("SECRETS-03", "frontend/src/observability.ts", 'labelKey: "q1_option_a"',
@@ -290,6 +320,10 @@ NEAR_MISSES = [
     # APPSEC safe counterparts (must-not-flag).
     ("APPSEC-01", "backend/appsec.py", 'execute("SELECT * FROM patients WHERE name = ?"',
      "Parameterized query; the value is bound, not interpolated."),
+    ("APPSEC-01", "backend/appsec.py", 'cur.execute(f"SELECT count(*) FROM patients")',
+     "Constant f-string with no interpolation builds no dynamic SQL; must not fire."),
+    ("APPSEC-02", "backend/appsec.py", 'os.system(f"find /backups',
+     "Constant f-string command with no interpolation is not injectable."),
     ("APPSEC-02", "backend/appsec.py", 'subprocess.run(["tar"',
      "Argument list with shell=False; no shell to inject into."),
     ("APPSEC-03", "backend/appsec.py", 'return requests.get(url)',
@@ -300,6 +334,8 @@ NEAR_MISSES = [
      "json, not pickle; no code execution on load."),
     ("APPSEC-06", "backend/appsec.py", 'allow_origins=["https://portal.example.org"]',
      "Explicit trusted origin, not a wildcard."),
+    ("APPSEC-07", "backend/appsec.py", 'logger.info("incoming %s %s", request.method',
+     "Logs only non-sensitive metadata (method + path), never the headers or body."),
 ]
 
 

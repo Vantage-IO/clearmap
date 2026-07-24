@@ -296,6 +296,20 @@
       "remediation": "Use https:// and verify the receiving party is BAA-covered before sending PHI."
     },
     {
+      "id": "TRANSIT-07",
+      "category": "TRANSIT",
+      "category_name": "Transmission Security",
+      "title": "TLS certificate verification disabled",
+      "severity": "high",
+      "source": "deterministic",
+      "hipaa_ref": "164.312(e)(1)",
+      "file": "backend/integrations.py",
+      "line": 43,
+      "structural_snippet": "resp = requests.get(f\"https://rx.partner-network.example/mrn/{patient_mrn}\", verify=False)",
+      "why": "A PHI call disables TLS certificate verification (verify=False), leaving the connection encrypted but unauthenticated and open to a machine-in-the-middle.",
+      "remediation": "Never disable certificate verification; install the correct CA/trust chain and keep verify on."
+    },
+    {
       "id": "TRANSIT-04",
       "category": "TRANSIT",
       "category_name": "Transmission Security",
@@ -304,7 +318,7 @@
       "source": "reasoning",
       "hipaa_ref": "164.312(e)(1)",
       "file": "backend/integrations.py",
-      "line": 46,
+      "line": 57,
       "structural_snippet": "resp = requests.get(f\"http://records.internal.svc.cluster.local:8080/records/{patient_mrn}\")",
       "why": "Internal service-to-service PHI over http to a host inside a trusted boundary (private cluster service name). REASONING, not deterministic: a regex can classify the host as internal but cannot tell whether PHI flows over it (cf. the safe fixture's http://localhost probe, which must stay silent). The agent confirms PHI + trusted boundary and emits a LOW advisory; external cleartext (TRANSIT-01) stays deterministic + critical. Defensible per 164.306(d)(3) with compensating controls.",
       "remediation": "Acceptable within a documented trusted boundary; zero-trust best practice is to use TLS/mTLS internally too."
@@ -366,6 +380,34 @@
       "remediation": "Never pass PHI to client analytics SDKs; identify by opaque non-PHI id only."
     },
     {
+      "id": "SESSION-05",
+      "category": "SESSION",
+      "category_name": "Frontend / Session Exposure",
+      "title": "PHI passed to a third-party user-identification method",
+      "severity": "high",
+      "source": "deterministic",
+      "hipaa_ref": "164.312(a)(2)(iv)",
+      "file": "frontend/src/observability.ts",
+      "line": 22,
+      "structural_snippet": "analytics.setUser({ name: patient.name, mrn: patient.mrn, dob: patient.dob });",
+      "why": "Patient name, MRN, and DOB passed to a third-party setUser call.",
+      "remediation": "Use an opaque non-PHI id; never pass name/MRN/DOB/SSN/diagnosis to a client SDK."
+    },
+    {
+      "id": "SESSION-06",
+      "category": "SESSION",
+      "category_name": "Frontend / Session Exposure",
+      "title": "PHI serialized to web storage under a benign key",
+      "severity": "high",
+      "source": "deterministic",
+      "hipaa_ref": "164.312(a)(2)(iv)",
+      "file": "frontend/src/storage.ts",
+      "line": 37,
+      "structural_snippet": "localStorage.setItem(\"appState\", JSON.stringify(patientChart));",
+      "why": "The storage key looks harmless but the value serializes a PHI-named object into localStorage.",
+      "remediation": "Keep PHI server-side; hold transient state in memory cleared on logout."
+    },
+    {
       "id": "TRACKING-01",
       "category": "TRACKING",
       "category_name": "Tracking / Analytics",
@@ -406,6 +448,20 @@
       "structural_snippet": "const shareLink = `https://clinic.example/chart?mrn=${patient.mrn}&condition=${patient.diagnosis}`;",
       "why": "Condition + MRN placed in a URL query string, leaking into history, logs, and Referer headers.",
       "remediation": "Reference records by opaque id; never put health context in URLs."
+    },
+    {
+      "id": "TRACKING-04",
+      "category": "TRACKING",
+      "category_name": "Tracking / Analytics",
+      "title": "Session-replay SDK initialized in a PHI application",
+      "severity": "high",
+      "source": "deterministic",
+      "hipaa_ref": "OCR online-tracking guidance",
+      "file": "frontend/src/observability.ts",
+      "line": 11,
+      "structural_snippet": "datadogRum.init({",
+      "why": "A session-replay SDK records the full patient screen and ships it to a third-party vendor.",
+      "remediation": "Disable session replay on PHI surfaces or mask all PHI; require a BAA and privacy review."
     },
     {
       "id": "AI-RAG-01",
@@ -570,7 +626,7 @@
       "source": "deterministic",
       "hipaa_ref": "CWE-89",
       "file": "backend/appsec.py",
-      "line": 15,
+      "line": 23,
       "structural_snippet": "cur.execute(f\"SELECT * FROM patients WHERE name = '{name}'\")",
       "why": "A request value is interpolated into a raw SQL statement, so input can change the query.",
       "remediation": "Use parameterized queries; never interpolate values into SQL."
@@ -584,7 +640,7 @@
       "source": "deterministic",
       "hipaa_ref": "CWE-78",
       "file": "backend/appsec.py",
-      "line": 21,
+      "line": 29,
       "structural_snippet": "os.system(f\"tar czf /backups/{patient_id}.tgz /data/{patient_id}\")",
       "why": "A shell command is built from input, allowing command injection and remote code execution.",
       "remediation": "Use subprocess with an argument list and shell=False; never build shell strings from input."
@@ -598,7 +654,7 @@
       "source": "deterministic",
       "hipaa_ref": "CWE-918",
       "file": "backend/appsec.py",
-      "line": 26,
+      "line": 34,
       "structural_snippet": "return requests.get(request.query_params[\"url\"])",
       "why": "An outbound request uses a URL taken directly from request input with no allowlist (SSRF).",
       "remediation": "Validate the URL host against an allowlist before fetching; reject internal targets."
@@ -612,7 +668,7 @@
       "source": "deterministic",
       "hipaa_ref": "CWE-22",
       "file": "backend/appsec.py",
-      "line": 31,
+      "line": 39,
       "structural_snippet": "with open(os.path.join(DOCS_ROOT, request.query_params[\"file\"])) as fh:",
       "why": "A file path is joined from request input with no normalization, allowing traversal to any file.",
       "remediation": "Use os.path.basename or resolve + verify the path stays within the document root."
@@ -626,7 +682,7 @@
       "source": "deterministic",
       "hipaa_ref": "CWE-502",
       "file": "backend/appsec.py",
-      "line": 37,
+      "line": 45,
       "structural_snippet": "return pickle.loads(blob)",
       "why": "Untrusted bytes are unpickled, which can execute arbitrary code.",
       "remediation": "Deserialize with json or yaml.safe_load; never unpickle untrusted input."
@@ -640,10 +696,24 @@
       "source": "deterministic",
       "hipaa_ref": "CWE-16",
       "file": "backend/appsec.py",
-      "line": 42,
+      "line": 50,
       "structural_snippet": "app.add_middleware(CORSMiddleware, allow_origins=[\"*\"], allow_credentials=True)",
       "why": "Wildcard CORS combined with credentials lets any origin read authenticated responses.",
       "remediation": "List explicit trusted origins; never combine wildcard origin with credentials."
+    },
+    {
+      "id": "APPSEC-07",
+      "category": "APPSEC",
+      "category_name": "Application Security",
+      "title": "Sensitive request data written to logs",
+      "severity": "high",
+      "source": "deterministic",
+      "hipaa_ref": "CWE-532",
+      "file": "backend/appsec.py",
+      "line": 18,
+      "structural_snippet": "logger.info(\"incoming request headers=%s body=%s\", dict(request.headers), request.body())",
+      "why": "Full request headers (Authorization) and the raw body are written to the logs, spilling credentials and PHI.",
+      "remediation": "Log only non-sensitive metadata; redact/omit Authorization, Cookie, and request/response bodies."
     }
   ]
 }

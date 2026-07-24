@@ -28,9 +28,19 @@ import re
 import subprocess
 from pathlib import Path
 
+# Vendored / generated / cache locations. Secrets never legitimately live here,
+# but content-hash blobs and bundled deps constantly trip entropy rules. A
+# gitignored package/cache store (a pnpm content store, a yarn/turbo/parcel
+# cache, coverage output) is the top real-repo false-positive source because
+# gitleaks `dir` ignores .gitignore. Mirror of rules/gitleaks.toml [allowlist]
+# and scripts/scan.py _SKIP_DIRS.
 VENDORED_PATH_RES = [re.compile(p) for p in (
     r"(^|/)node_modules/", r"(^|/)vendor/", r"(^|/)dist/", r"(^|/)build/",
     r"(^|/)\.next/", r"(^|/)__snapshots__/", r"\.min\.(js|css)$", r"\.(js|css)\.map$",
+    r"(^|/)\.pnpm-store/", r"(^|/)\.yarn/", r"(^|/)\.pnp\.", r"(^|/)\.turbo/",
+    r"(^|/)\.cache/", r"(^|/)\.parcel-cache/", r"(^|/)\.svelte-kit/",
+    r"(^|/)\.nuxt/", r"(^|/)\.output/", r"(^|/)coverage/", r"(^|/)\.vercel/",
+    r"(^|/)\.serverless/",
 )]
 
 _TEST_PATH_RE = re.compile(r"(^|/)(tests?|__tests__|__mocks__|spec)/")

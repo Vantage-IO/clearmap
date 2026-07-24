@@ -19,7 +19,7 @@ SCAN = REPO / "scripts" / "scan.py"
 PY = sys.executable
 
 FAKE_SEMGREP = f"""#!{PY}
-import os, sys, time
+import os, sys, time, json
 a = sys.argv[1:]
 if a[:1] == ["--version"]:
     print("1.164.0"); sys.exit(0)
@@ -32,6 +32,21 @@ if m == "malformed":
     sys.stdout.write("<<<not-json>>>\\n"); sys.exit(0)
 if m == "timeout":
     time.sleep(5); sys.exit(0)
+if m == "partial":
+    # Per-batch state: batch 0 hangs past the outer timeout (skipped-and-
+    # recorded); every later batch returns a real finding that must be KEPT.
+    state = os.environ["FAKE_SEMGREP_STATE"]
+    try: n = int(open(state).read() or "0")
+    except OSError: n = 0
+    open(state, "w").write(str(n + 1))
+    if n == 0:
+        time.sleep(5); sys.exit(0)
+    files = [x for x in a if x.endswith(".py")]
+    res = [{{"check_id": "rules.demo", "path": files[0],
+            "start": {{"line": 1}}, "end": {{"line": 1}},
+            "extra": {{"metadata": {{"clearmap_category": "APPSEC",
+                                   "clearmap_severity": "high"}}, "message": "m"}}}}]
+    sys.stdout.write(json.dumps({{"results": res}})); sys.exit(1)
 sys.stdout.write('{{"results": []}}\\n'); sys.exit(0)
 """
 
@@ -121,9 +136,11 @@ class FailClosedCase(unittest.TestCase):
         rc, data = self.run_scan(semgrep="malformed")
         self.assert_failed(rc, data, "semgrep", "malformed-output")
 
-    def test_semgrep_timeout(self):
+    def test_semgrep_timeout_degrades_to_partial(self):
+        # A wall-clock timeout no longer zeroes the scan: the timed-out batch is
+        # skipped-and-recorded, so the status is 'partial' (still not-ok, exit 2).
         rc, data = self.run_scan(semgrep="timeout", timeout=1)
-        self.assert_failed(rc, data, "semgrep", "timeout")
+        self.assert_failed(rc, data, "semgrep", "partial")
 
     def test_gitleaks_engine_error(self):
         rc, data = self.run_scan(gitleaks="error")
@@ -174,6 +191,56 @@ class FailClosedCase(unittest.TestCase):
         # Engines may be absent in CI's isolated env; either way the parent dir
         # for --out must have been created and the file written.
         self.assertTrue(nested.exists(), proc.stderr)
+
+
+class PartialResultCase(unittest.TestCase):
+    """A wall-clock timeout on one batch must DEGRADE, not zero: findings from
+    the batches that DID complete are preserved, the status is 'partial', and the
+    scan is still marked not-ok / exit 2 (partial is never treated as clean)."""
+
+    def run_partial_scan(self, nfiles: int, timeout: int = 1):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        bind = root / "bin"
+        bind.mkdir()
+        target = root / "repo"
+        target.mkdir()
+        # Filler files fill batch 0 (which will time out); a trailing file lands
+        # in batch 1 (which returns a finding that must survive).
+        width = len(str(nfiles))
+        for i in range(nfiles):
+            (target / f"f{i:0{width}d}.py").write_text("x = 1\n")
+        (target / "zcatch.py").write_text("y = 2\n")
+        for name, body in (("semgrep", FAKE_SEMGREP), ("gitleaks", FAKE_GITLEAKS)):
+            p = bind / name
+            p.write_text(body)
+            p.chmod(p.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        out = root / "findings.json"
+        env = dict(os.environ, PATH=str(bind), FAKE_SEMGREP="partial",
+                   FAKE_GITLEAKS="leaks", FAKE_SEMGREP_STATE=str(root / "state"))
+        proc = subprocess.run(
+            [PY, str(SCAN), str(target), "--out", str(out),
+             "--engine-timeout", str(timeout)],
+            capture_output=True, text=True, env=env)
+        data = json.loads(out.read_text()) if out.exists() else None
+        return proc.returncode, data
+
+    def setUp(self):
+        sys.path.insert(0, str(REPO / "scripts"))
+
+    def test_partial_keeps_completed_batches_but_not_scoreable(self):
+        import scan
+        nfiles = scan.SEMGREP_BATCH + 1  # forces >= 2 batches
+        rc, data = self.run_partial_scan(nfiles)
+        self.assertEqual(rc, 2, "a partial scan is not scoreable -> exit 2")
+        self.assertFalse(data["scan_ok"])
+        self.assertEqual(data["engine_status"]["semgrep"]["status"], "partial")
+        # The finding from the batch that completed is preserved (not zeroed).
+        self.assertTrue(any(f["category"] == "APPSEC" for f in data["findings"]),
+                        "completed-batch semgrep findings must survive a partial run")
+        # And gitleaks results are still there too.
+        self.assertTrue(any(f["category"] == "SECRETS" for f in data["findings"]))
 
 
 if __name__ == "__main__":

@@ -9,6 +9,13 @@ useDefault = true
 # Vendored / generated / binary-adjacent paths: secrets never live here, but
 # base64 blobs and content hashes in them constantly trip entropy rules.
 # (Top real-repo false-positive source — see runbooks/build-state.md.)
+#
+# gitleaks `dir` mode ignores .gitignore, so a gitignored package/cache store
+# (a pnpm content-addressed store, a yarn/turbo/parcel cache, coverage output)
+# is walked and its extensionless content-hash blobs trip the entropy rules.
+# Every such vendored/cache location is allowlisted here by path so those blobs
+# are never scanned. Mirror of scripts/filters.py VENDORED_PATH_RES and
+# scripts/scan.py _SKIP_DIRS.
 [allowlist]
 paths = [
   '''\.svg$''',
@@ -18,7 +25,20 @@ paths = [
   '''(^|/)pnpm-lock\.yaml$''',
   '''(^|/)Cargo\.lock$''',
   '''(^|/)poetry\.lock$''',
+  '''\.lock$''',
   '''(^|/)node_modules/''',
+  '''(^|/)\.pnpm-store/''',
+  '''(^|/)\.yarn/''',
+  '''(^|/)\.pnp\.''',
+  '''(^|/)\.turbo/''',
+  '''(^|/)\.cache/''',
+  '''(^|/)\.parcel-cache/''',
+  '''(^|/)\.svelte-kit/''',
+  '''(^|/)\.nuxt/''',
+  '''(^|/)\.output/''',
+  '''(^|/)coverage/''',
+  '''(^|/)\.vercel/''',
+  '''(^|/)\.serverless/''',
   '''\.min\.(js|css)(\.map)?$''',
   '''\.(js|css)\.map$''',
   '''(^|/)__snapshots__/''',
@@ -30,11 +50,28 @@ description = "Hardcoded EHR/FHIR API key"
 regex = '''ehr_(?:live|test)_[A-Za-z0-9]{8,}'''
 keywords = ["ehr_live", "ehr_test"]
 
+# Only real database driver schemes carry credentials worth flagging. The old
+# scheme-agnostic pattern (any `x://user:pass@host`) fired on http(s)/git/ssh
+# basic-auth URLs and on placeholders, producing dozens of false criticals.
+# The scheme is now constrained to known DB drivers, and the password capture
+# (secretGroup 1) is checked against a placeholder allowlist so templated /
+# example credentials never fire.
 [[rules]]
 id = "clearmap-db-uri-credentials"
 description = "Database connection string with embedded credentials"
-regex = '''[a-zA-Z][a-zA-Z0-9+.-]*://[^:@/\s]+:[^@/\s]{3,}@[^\s"']+'''
-keywords = ["://"]
+regex = '''(?i)(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|mssql|clickhouse|amqp|jdbc:[a-z0-9]+)://[^:@/\s]+:([^@/\s]{3,})@[^\s"']+'''
+secretGroup = 1
+keywords = ["postgres", "mysql", "mariadb", "mongodb", "redis", "mssql", "clickhouse", "amqp", "jdbc:"]
+
+  # The captured password must not be a placeholder / template / example value.
+  [rules.allowlist]
+  regexTarget = "secret"
+  regexes = [
+    '''^\$\{[^}]*\}$''',
+    '''^<[^>]+>$''',
+    '''^\{\{[^}]*\}\}$''',
+    '''(?i)^(pass|passwd|password|replace_?me|change_?me|change_?this|your_?password|yourpassword|example|placeholder|x{3,})$''',
+  ]
 
 [[rules]]
 id = "clearmap-django-secret-key"

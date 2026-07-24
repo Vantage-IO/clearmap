@@ -15,12 +15,25 @@ rules:
       remediation: Do not persist PHI in localStorage/sessionStorage; use in-memory state cleared on logout.
     patterns:
       - pattern-either:
-          - pattern: localStorage.setItem($K, ...)
-          - pattern: sessionStorage.setItem($K, ...)
-      - metavariable-pattern:
-          metavariable: $K
-          patterns:
-            - pattern-regex: (?i)(patient|mrn|diagnosis|phi|chart|dob|ssn)
+          # A PHI-looking storage key.
+          - patterns:
+              - pattern-either:
+                  - pattern: localStorage.setItem($K, $VAL)
+                  - pattern: sessionStorage.setItem($K, $VAL)
+              - metavariable-regex:
+                  metavariable: $K
+                  regex: (?i).*(patient|mrn|diagnosis|phi|chart|dob|ssn)
+          # Or a BENIGN key whose value serializes a PHI-named object
+          # (localStorage.setItem("state", JSON.stringify(patientChart))). The
+          # JSON.stringify wrapper keeps this precise: a bare opaque token stored
+          # under a benign key (e.g. a CSRF token named patientToken) does NOT match.
+          - patterns:
+              - pattern-either:
+                  - pattern: localStorage.setItem($K, JSON.stringify($V))
+                  - pattern: sessionStorage.setItem($K, JSON.stringify($V))
+              - metavariable-regex:
+                  metavariable: $V
+                  regex: (?i).*(patient|mrn|diagnos|phi|chart|dob|ssn|medication|allerg|symptom)
 
   - id: session-phi-in-cookie
     languages: [typescript, javascript]
@@ -51,6 +64,30 @@ rules:
       remediation: Never pass PHI to client SDKs; use an opaque id and non-PHI traits only.
     patterns:
       - pattern: $SDK.identify($ID, $OBJ)
+      - metavariable-pattern:
+          metavariable: $OBJ
+          patterns:
+            - pattern-regex: (?i)\b(name|mrn|diagnosis|dob|ssn)\b
+
+  - id: session-patient-identify-family
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      PHI passed to a third-party user-identification method (setUser /
+      setUserProperties, or a single-object identify) ships patient identifiers to
+      a vendor. Identify users by an opaque, non-PHI id and never attach clinical
+      or identifying traits.
+    metadata:
+      clearmap_category: SESSION
+      clearmap_severity: high
+      clearmap_title: PHI passed to a third-party user-identification method
+      hipaa_ref: 164.312(a)(2)(iv)
+      remediation: Use an opaque non-PHI id; never pass name/MRN/DOB/SSN/diagnosis to a client SDK.
+    patterns:
+      - pattern-either:
+          - pattern: $SDK.setUser($OBJ)
+          - pattern: $SDK.setUserProperties($OBJ)
+          - pattern: $SDK.identify($OBJ)
       - metavariable-pattern:
           metavariable: $OBJ
           patterns:
