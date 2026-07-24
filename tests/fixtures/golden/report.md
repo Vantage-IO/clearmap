@@ -14,7 +14,7 @@
 |----------|------|--------|-----|
 | 3 | 2 | 1 | 1 |
 
-7 findings across 8 of 10 applicable safeguard categories: 4 confirmed by automated rules and 3 identified by AI-assisted review (pending engineer verification). 3 likely false positives were suppressed automatically.
+7 findings across 6 of 8 applicable safeguard categories: 4 confirmed by automated rules and 3 identified by AI-assisted review (pending engineer verification). 3 likely false positives were suppressed automatically.
 
 **Top findings**
 

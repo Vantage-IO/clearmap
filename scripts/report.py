@@ -404,8 +404,10 @@ def build_model(data: dict, repo: str, date: str,
     next_steps.append("Re-run ClearMap after remediation to confirm the score improves.")
 
     total = len(findings)
+    cats_with_findings = sum(1 for _, c in cat_rows
+                             if c["deterministic_findings"] + c["reasoning_findings"] > 0)
     summary_bits = [f"{total} finding{'s' if total != 1 else ''} across "
-                    f"{n_applicable} of {len(cat_rows)} applicable safeguard categories"]
+                    f"{cats_with_findings} of {n_applicable} applicable safeguard categories"]
     mix = []
     if n_det:
         mix.append(f"{n_det} confirmed by automated rules")
